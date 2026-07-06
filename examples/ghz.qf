@@ -1,0 +1,14 @@
+# GHZ preparation with a peephole identity (h x h -> z) and an s sdg pair.
+qubits 3
+bits 3
+h q0
+cx q0, q1
+cx q1, q2
+h q2
+x q2
+h q2
+s q0
+sdg q0
+measure q0 -> c0
+measure q1 -> c1
+measure q2 -> c2
