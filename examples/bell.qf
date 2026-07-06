@@ -1,0 +1,9 @@
+# Bell pair with a redundant x x pair the optimizer removes.
+qubits 2
+bits 2
+h q0
+x q1
+x q1
+cx q0, q1
+measure q0 -> c0
+measure q1 -> c1

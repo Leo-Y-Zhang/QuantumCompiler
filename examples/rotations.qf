@@ -1,0 +1,12 @@
+# Rotation merging plus commutation through a cx control.
+# rz(pi/4) rz(pi/4) merge to rz(pi/2), which then commutes through the
+# cx control and cancels against rz(-pi/2); the rx pair merges to rx(0).
+qubits 2
+bits 1
+rz(pi/4) q0
+rz(pi/4) q0
+cx q0, q1
+rz(-pi/2) q0
+rx(pi/2) q1
+rx(-pi/2) q1
+measure q1 -> c0
