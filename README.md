@@ -1,5 +1,7 @@
 # QForge
 
+[![CI](https://github.com/GreenPandaTech/QForge/actions/workflows/ci.yml/badge.svg)](https://github.com/GreenPandaTech/QForge/actions/workflows/ci.yml)
+
 **A toy educational quantum-circuit compiler with *verified* optimization
 passes. Pure Python stdlib — zero runtime dependencies.**
 
