@@ -7,10 +7,11 @@ Python standard library only. Not a production quantum compiler.
 
 from qforge.ir import Circuit, Gate
 from qforge.parser import parse
+from qforge.qasm import emit_qasm, parse_qasm
 from qforge.sim import simulate
 from qforge.verify import EquivalenceResult, check_equivalence
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
     "Circuit",
@@ -18,6 +19,8 @@ __all__ = [
     "Gate",
     "__version__",
     "check_equivalence",
+    "emit_qasm",
     "parse",
+    "parse_qasm",
     "simulate",
 ]

@@ -22,6 +22,7 @@ from qforge.errors import QForgeError
 from qforge.ir import Circuit, dump
 from qforge.parser import parse
 from qforge.passes import DeadCodeElimination, PassManager, PassStats, default_passes
+from qforge.qasm import emit_qasm, parse_qasm
 from qforge.verify import check_equivalence
 
 _DCE_WARNING = (
@@ -42,13 +43,15 @@ def build_arg_parser() -> argparse.ArgumentParser:
     compile_parser = subcommands.add_parser(
         "compile", help="parse, optionally optimize, and emit a circuit"
     )
-    compile_parser.add_argument("file", help="DSL source file")
+    compile_parser.add_argument(
+        "file", help="source file (.qasm is parsed as OpenQASM 2.0, else DSL)"
+    )
     compile_parser.add_argument(
         "--opt", "-O", action="store_true", help="run the optimization pipeline"
     )
     compile_parser.add_argument(
         "--emit",
-        choices=("ir", "ascii", "svg"),
+        choices=("ir", "ascii", "svg", "qasm"),
         default="ascii",
         help="output format (default: ascii)",
     )
@@ -67,7 +70,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
     stats_parser = subcommands.add_parser(
         "stats", help="show gate counts before/after each optimization pass"
     )
-    stats_parser.add_argument("file", help="DSL source file")
+    stats_parser.add_argument(
+        "file", help="source file (.qasm is parsed as OpenQASM 2.0, else DSL)"
+    )
     stats_parser.add_argument(
         "--dce", action="store_true", help="include dead-code elimination in the pipeline"
     )
@@ -82,8 +87,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     except OSError as exc:
         print(f"error: cannot read '{args.file}': {exc.strerror or exc}", file=sys.stderr)
         return 1
+    parser_fn = parse_qasm if args.file.lower().endswith(".qasm") else parse
     try:
-        circuit = parse(source)
+        circuit = parser_fn(source)
     except QForgeError as exc:
         print(exc.format(args.file), file=sys.stderr)
         return 2
@@ -117,7 +123,11 @@ def _run_compile(args: argparse.Namespace, original: Circuit) -> int:
         if args.verify:
             print(_DCE_WARNING, file=sys.stderr)
         optimized = DeadCodeElimination().run(optimized)
-    output = _emit(args, original, optimized)
+    try:
+        output = _emit(args, original, optimized)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
     if args.out:
         try:
             Path(args.out).write_text(output, encoding="utf-8")
@@ -134,6 +144,8 @@ def _emit(args: argparse.Namespace, original: Circuit, optimized: Circuit) -> st
         return dump(optimized)
     if args.emit == "svg":
         return render_svg(optimized)
+    if args.emit == "qasm":
+        return emit_qasm(optimized)
     if args.opt:
         return (
             "BEFORE:\n"

@@ -3,6 +3,26 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.2.0] - 2026-07-07
+
+### Added
+
+- OpenQASM 2.0 emitter (`qforge.emit_qasm`, CLI `--emit qasm`): qelib1
+  gate names, `q`/`c` registers, angles as plain floats.
+- OpenQASM 2.0 importer (`qforge.parse_qasm`) for a documented subset:
+  single qreg + optional single creg (any names), the qelib1 gates
+  h x y z s sdg t tdg rx ry rz cx cz swap, indexed operands only,
+  `measure q[i] -> c[j]`, pi-arithmetic angle expressions, `//` comments.
+  Unsupported constructs (user-defined gates, `if`, `barrier`, `opaque`,
+  `reset`, `U`/`CX` builtins, whole-register operands, multiple registers)
+  are rejected with precise line:column diagnostics.
+- CLI: files ending in `.qasm` are auto-parsed as OpenQASM 2.0 for both
+  `compile` and `stats`.
+- Tests: exact emitter output, structural + statevector-equivalence
+  roundtrips for all example programs (original and optimized), importer
+  error positions, and CLI end-to-end QASM-in/QASM-out (54 new tests,
+  244 total).
+
 ## [0.1.0] - 2026-07-06
 
 ### Added
