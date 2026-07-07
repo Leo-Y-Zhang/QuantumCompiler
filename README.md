@@ -96,15 +96,18 @@ python -m venv .venv
 .venv/Scripts/python.exe -m pip install -e ".[dev]"   # Windows
 # .venv/bin/python -m pip install -e ".[dev]"          # Linux/macOS
 
-.venv/Scripts/python.exe -m pytest -q                  # 190 tests
+.venv/Scripts/python.exe -m pytest -q                  # 244 tests
 ```
 
 CLI (also runnable as `python -m qforge`):
 
 ```
-qforge compile FILE [--opt] [--emit ir|ascii|svg] [--verify] [--dce] [--out FILE]
+qforge compile FILE [--opt] [--emit ir|ascii|svg|qasm] [--verify] [--dce] [--out FILE]
 qforge stats FILE
 ```
+
+Files ending in `.qasm` are parsed as OpenQASM 2.0 (see below); everything
+else is parsed as the DSL.
 
 Exit codes: `0` success (and verification passed), `1` compile/verify
 failure, `2` usage errors.
@@ -116,6 +119,53 @@ SVG diagrams (committed under `examples/`, regenerable with
 |---|---|
 | ![bell before](examples/bell.before.svg) | ![bell after](examples/bell.after.svg) |
 | ![rotations before](examples/rotations.before.svg) | ![rotations after](examples/rotations.after.svg) |
+
+## OpenQASM 2.0 interop
+
+Any circuit can be exported to OpenQASM 2.0 with `--emit qasm` (or
+`qforge.emit_qasm`), and `.qasm` files compile directly. Real observed run:
+
+```
+$ qforge compile examples/bell.qf --opt --verify --emit qasm
+verify: equivalent up to global phase (max error 0.000e+00, 8 inputs)
+OPENQASM 2.0;
+include "qelib1.inc";
+qreg q[2];
+creg c[2];
+h q[0];
+cx q[0],q[1];
+measure q[0] -> c[0];
+measure q[1] -> c[1];
+```
+
+Feeding that file back in (`qforge compile bell.qasm --emit ir`) recovers the
+DSL circuit; the test suite round-trips every example program (and its
+optimized form) through QASM and re-proves equivalence with the statevector
+checker.
+
+**Honest subset caveats.** The importer accepts a documented *subset* of
+OpenQASM 2.0, not the full language:
+
+- one `qreg` and at most one `creg` (any names — they are re-emitted as
+  `q`/`c`), sizes >= 1;
+- the qelib1 gates `h x y z s sdg t tdg rx ry rz cx cz swap` plus
+  `measure q[i] -> c[j]`, with indexed operands only (no whole-register
+  broadcast like `h q;`);
+- angle expressions over numbers (exponent notation included), `pi`,
+  `+ - * /`, and parentheses;
+- `//` comments; free-form whitespace.
+
+User-defined `gate` blocks, `if`, `barrier`, `opaque`, `reset`, and the
+bare `U`/`CX` builtins are rejected with the same precise `line:col`
+diagnostics as the DSL parser, e.g.
+
+```
+bad.qasm:3:1: error: 'barrier' is not supported
+```
+
+The emitter writes angles as plain floats (`rz(0.7853981633974483)`), so a
+DSL -> QASM -> DSL round trip loses the `pi/4` *spelling* but preserves the
+value bit-exactly.
 
 ## Architecture
 
@@ -132,10 +182,12 @@ src/qforge/
                  pseudo-random inputs)
   draw_ascii.py  aligned-column ASCII circuit diagrams
   draw_svg.py    hand-rolled SVG writer (no deps)
+  qasm.py        OpenQASM 2.0 emitter + documented-subset importer
   cli.py         argparse CLI
-tests/           190 pytest tests: parser errors by position, every pass,
+tests/           244 pytest tests: parser errors by position, every pass,
                  hand-computed amplitudes (Bell/GHZ), equivalence checker
-                 positive AND negative cases, SVG well-formedness, CLI e2e
+                 positive AND negative cases, SVG well-formedness, QASM
+                 exact-output/roundtrip/error-position checks, CLI e2e
 ```
 
 Why the IR is "effectively a DAG": gates are stored in program order, but
@@ -161,7 +213,6 @@ whitelisted mini-parser, not `eval`. All examples are synthetic.
 
 ## Roadmap
 
-- QASM 2.0 import/export.
 - Controlled-phase fusion and a T-count report.
 - A `--proof` mode emitting the unitary difference norm for small circuits.
 - Gate-count-vs-depth pareto stats.

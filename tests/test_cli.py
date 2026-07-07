@@ -99,6 +99,64 @@ class TestStats:
         assert "6 -> 4" in out
 
 
+BELL_QASM = """\
+OPENQASM 2.0;
+include "qelib1.inc";
+qreg q[2];
+creg c[2];
+h q[0];
+x q[1];
+x q[1];
+cx q[0],q[1];
+measure q[0] -> c[0];
+measure q[1] -> c[1];
+"""
+
+
+@pytest.fixture()
+def qasm_program(tmp_path: Path) -> Path:
+    path = tmp_path / "bell.qasm"
+    path.write_text(BELL_QASM, encoding="ascii")
+    return path
+
+
+class TestQasm:
+    def test_emit_qasm(self, program: Path, capsys) -> None:
+        assert cli.main(["compile", str(program), "--emit", "qasm"]) == 0
+        out = capsys.readouterr().out
+        assert out == BELL_QASM
+
+    def test_qasm_input_auto_detected(self, qasm_program: Path, capsys) -> None:
+        assert cli.main(["compile", str(qasm_program), "--emit", "ir"]) == 0
+        out = capsys.readouterr().out
+        assert out.startswith("qubits 2")
+        assert "measure q0 -> c0" in out
+
+    def test_qasm_input_opt_verify(self, qasm_program: Path, capsys) -> None:
+        assert cli.main(["compile", str(qasm_program), "-O", "--verify"]) == 0
+        assert "equivalent" in capsys.readouterr().err
+
+    def test_qasm_stats(self, qasm_program: Path, capsys) -> None:
+        assert cli.main(["stats", str(qasm_program)]) == 0
+        assert "total" in capsys.readouterr().out
+
+    def test_qasm_syntax_error_position(self, tmp_path: Path, capsys) -> None:
+        bad = tmp_path / "bad.qasm"
+        bad.write_text(
+            'OPENQASM 2.0;\nqreg q[1];\nbarrier q;\n', encoding="ascii"
+        )
+        assert cli.main(["compile", str(bad)]) == 2
+        err = capsys.readouterr().err
+        assert "bad.qasm:3:1: error:" in err
+        assert "barrier" in err
+
+    def test_emit_qasm_zero_qubits_exit_2(self, tmp_path: Path, capsys) -> None:
+        empty = tmp_path / "empty.qf"
+        empty.write_text("", encoding="ascii")
+        assert cli.main(["compile", str(empty), "--emit", "qasm"]) == 2
+        assert "error" in capsys.readouterr().err
+
+
 class TestSubprocessEndToEnd:
     def run_cli(self, *args: str) -> subprocess.CompletedProcess:
         return subprocess.run(
@@ -119,10 +177,23 @@ class TestSubprocessEndToEnd:
         assert result.returncode == 0
         assert "total" in result.stdout
 
+    def test_qasm_in_qasm_out_end_to_end(self, qasm_program: Path, tmp_path: Path) -> None:
+        out_file = tmp_path / "roundtrip.qasm"
+        result = self.run_cli(
+            "compile", str(qasm_program), "-O", "--verify",
+            "--emit", "qasm", "--out", str(out_file),
+        )
+        assert result.returncode == 0
+        assert "equivalent" in result.stderr
+        text = out_file.read_text(encoding="ascii")
+        assert text.startswith("OPENQASM 2.0;")
+        assert "x q[1];" not in text  # the x x pair was cancelled
+        assert "measure q[0] -> c[0];" in text
+
     def test_version(self) -> None:
         result = self.run_cli("--version")
         assert result.returncode == 0
-        assert "qforge 0.1.0" in result.stdout
+        assert "qforge 0.2.0" in result.stdout
 
     def test_usage_error_exit_2(self) -> None:
         result = self.run_cli()
