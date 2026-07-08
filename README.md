@@ -1,11 +1,11 @@
-# Daedalus
+# Daedalus - a toy quantum-circuit compiler whose optimizations are proven correct by simulation
 
 [![CI](https://github.com/GreenPandaTech/Daedalus/actions/workflows/ci.yml/badge.svg)](https://github.com/GreenPandaTech/Daedalus/actions/workflows/ci.yml)
 
 *Daedalus — the master craftsman who built the Labyrinth; this one crafts
 quantum circuits and proves its rewrites never lose the way.*
 
-**A toy educational quantum-circuit compiler with *verified* optimization
+**A toy educational quantum-circuit DSL compiler with *verified* optimization
 passes. Pure Python stdlib — zero runtime dependencies.**
 
 Daedalus compiles a small quantum-circuit DSL through a real compiler pipeline
@@ -14,9 +14,9 @@ its optimizations did not change the circuit's meaning, using a built-in
 statevector simulator and an up-to-global-phase equivalence check.
 
 > **Honest framing:** this is a toy compiler for learning and portfolio
-> purposes. It demonstrates genuine compiler architecture and genuinely
-> verified rewrites, but it is not a production quantum compiler (no
-> hardware backends, no routing, no noise models — see Limitations).
+> purposes. It has a real compiler architecture and simulation-verified
+> rewrites, but it is not a production quantum compiler (no hardware
+> backends, no routing, no noise models — see Limitations).
 
 ## Why it is interesting
 
@@ -212,8 +212,11 @@ whitelisted mini-parser, not `eval`. All examples are synthetic.
 - Measurement is modelled as a marker, not a collapse: the simulator
   compares *pre-measurement* statevectors and passes never move or alter
   `measure` gates. There is no classical control flow.
-- Verification samples inputs (8 per check) — overwhelming evidence, not a
-  formal proof.
+- Verification samples inputs, not exhaustive states: computational basis
+  states (all of them for <=3 qubits, a fixed subset above that) plus four
+  seeded pseudo-random states per check. That is overwhelming evidence, not a
+  formal proof — the 2-qubit examples above happen to use 8 inputs (4 basis +
+  4 random).
 - No hardware backends, transpilation targets, routing, or noise models.
 - The commutation pass only handles z-diagonal gates through cx controls —
   intentionally the simplest genuinely useful case.
