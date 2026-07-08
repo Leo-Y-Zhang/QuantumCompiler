@@ -7,6 +7,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Peephole pass: additional Hadamard-conjugation identities `h y h -> y`
+  (equal up to global phase) and the basis-change rotation rewrites
+  `h rz(a) h -> rx(a)`, `h rx(a) h -> rz(a)`, `h ry(a) h -> ry(-a)`,
+  completing the family alongside the existing `h x h -> z` / `h z h -> x`.
+  Each is proven semantics-preserving by the statevector equivalence checker
+  (7 new tests, 251 total).
 - gitleaks secret-scanning job in CI (gitleaks/gitleaks-action@v2).
 
 ## [0.2.0] - 2026-07-07
