@@ -78,7 +78,7 @@ bad.qf:2:1: error: unknown gate 'foo'
 |---|---|
 | `cancel-inverses` | removes adjacent self-inverse pairs (`h h`, `x x`, `cx cx`, `s sdg`, `t tdg`, ...) |
 | `merge-rotations` | fuses adjacent same-axis rotations, drops angles that are 0 mod 2pi |
-| `peephole` | algebraic identities: `h x h -> z`, `h z h -> x` |
+| `peephole` | Hadamard-conjugation identities: `h x h -> z`, `h z h -> x`, `h y h -> y`, and the basis-change rotations `h rz(a) h -> rx(a)`, `h rx(a) h -> rz(a)`, `h ry(a) h -> ry(-a)` |
 | `commute-cancel` | commutes z-diagonal gates through cx controls to expose cancellations |
 | `dead-code` | *(off by default, `--dce`)* drops gates on never-measured qubits; documented as observably unsafe if you inspect the full state |
 
@@ -103,7 +103,7 @@ python -m venv .venv
 .venv/Scripts/python.exe -m pip install -e ".[dev]"   # Windows
 # .venv/bin/python -m pip install -e ".[dev]"          # Linux/macOS
 
-.venv/Scripts/python.exe -m pytest -q                  # 244 tests
+.venv/Scripts/python.exe -m pytest -q                  # 251 tests
 ```
 
 CLI (also runnable as `python -m daedalus`):
@@ -191,7 +191,7 @@ src/daedalus/
   draw_svg.py    hand-rolled SVG writer (no deps)
   qasm.py        OpenQASM 2.0 emitter + documented-subset importer
   cli.py         argparse CLI
-tests/           244 pytest tests: parser errors by position, every pass,
+tests/           251 pytest tests: parser errors by position, every pass,
                  hand-computed amplitudes (Bell/GHZ), equivalence checker
                  positive AND negative cases, SVG well-formedness, QASM
                  exact-output/roundtrip/error-position checks, CLI e2e
