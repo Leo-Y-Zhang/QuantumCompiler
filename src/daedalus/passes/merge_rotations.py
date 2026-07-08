@@ -11,7 +11,7 @@ from __future__ import annotations
 import math
 from dataclasses import replace
 
-from qforge.ir import Circuit, Gate
+from daedalus.ir import Circuit, Gate
 
 _ROTATIONS = frozenset({"rx", "ry", "rz"})
 EPSILON = 1e-9

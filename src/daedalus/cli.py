@@ -1,4 +1,4 @@
-"""Command-line interface for qforge.
+"""Command-line interface for daedalus.
 
 Exit codes
 ----------
@@ -15,15 +15,15 @@ import sys
 from pathlib import Path
 from typing import Sequence
 
-from qforge import __version__
-from qforge.draw_ascii import render_ascii
-from qforge.draw_svg import render_svg
-from qforge.errors import QForgeError
-from qforge.ir import Circuit, dump
-from qforge.parser import parse
-from qforge.passes import DeadCodeElimination, PassManager, PassStats, default_passes
-from qforge.qasm import emit_qasm, parse_qasm
-from qforge.verify import check_equivalence
+from daedalus import __version__
+from daedalus.draw_ascii import render_ascii
+from daedalus.draw_svg import render_svg
+from daedalus.errors import DaedalusError
+from daedalus.ir import Circuit, dump
+from daedalus.parser import parse
+from daedalus.passes import DeadCodeElimination, PassManager, PassStats, default_passes
+from daedalus.qasm import emit_qasm, parse_qasm
+from daedalus.verify import check_equivalence
 
 _DCE_WARNING = (
     "warning: dead-code elimination changes unobserved state; "
@@ -34,10 +34,10 @@ _DCE_WARNING = (
 def build_arg_parser() -> argparse.ArgumentParser:
     """Construct the top-level argument parser with both subcommands."""
     parser = argparse.ArgumentParser(
-        prog="qforge",
+        prog="daedalus",
         description="Toy educational quantum-circuit DSL compiler (stdlib only).",
     )
-    parser.add_argument("--version", action="version", version=f"qforge {__version__}")
+    parser.add_argument("--version", action="version", version=f"daedalus {__version__}")
     subcommands = parser.add_subparsers(dest="command", required=True)
 
     compile_parser = subcommands.add_parser(
@@ -90,7 +90,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser_fn = parse_qasm if args.file.lower().endswith(".qasm") else parse
     try:
         circuit = parser_fn(source)
-    except QForgeError as exc:
+    except DaedalusError as exc:
         print(exc.format(args.file), file=sys.stderr)
         return 2
     if args.command == "stats":

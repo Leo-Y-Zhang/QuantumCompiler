@@ -10,7 +10,7 @@ merge-rotations pass).
 
 from __future__ import annotations
 
-from qforge.ir import Circuit, Gate
+from daedalus.ir import Circuit, Gate
 
 _INVERSE = {
     "h": "h",

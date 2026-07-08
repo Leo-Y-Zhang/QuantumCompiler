@@ -1,8 +1,8 @@
 """Tests for the peephole-identity pass (h x h -> z, h z h -> x)."""
 
-from qforge.parser import parse
-from qforge.passes.peephole import Peephole
-from qforge.verify import check_equivalence
+from daedalus.parser import parse
+from daedalus.passes.peephole import Peephole
+from daedalus.verify import check_equivalence
 
 PASS = Peephole()
 

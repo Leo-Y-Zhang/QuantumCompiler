@@ -16,7 +16,7 @@ import cmath
 import math
 import random
 
-from qforge.ir import Circuit, Gate
+from daedalus.ir import Circuit, Gate
 
 #: Hard cap: a statevector for n qubits has 2**n complex entries.
 MAX_QUBITS = 10

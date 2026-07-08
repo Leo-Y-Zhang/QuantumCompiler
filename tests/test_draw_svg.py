@@ -2,8 +2,8 @@
 
 import xml.etree.ElementTree as ET
 
-from qforge.draw_svg import render_svg
-from qforge.parser import parse
+from daedalus.draw_svg import render_svg
+from daedalus.parser import parse
 
 SVG_NS = "{http://www.w3.org/2000/svg}"
 

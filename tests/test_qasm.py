@@ -5,12 +5,12 @@ from pathlib import Path
 
 import pytest
 
-from qforge.errors import ParseError
-from qforge.ir import Circuit, Gate
-from qforge.parser import parse
-from qforge.passes import PassManager, default_passes
-from qforge.qasm import emit_qasm, parse_qasm
-from qforge.verify import check_equivalence
+from daedalus.errors import ParseError
+from daedalus.ir import Circuit, Gate
+from daedalus.parser import parse
+from daedalus.passes import PassManager, default_passes
+from daedalus.qasm import emit_qasm, parse_qasm
+from daedalus.verify import check_equivalence
 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
 

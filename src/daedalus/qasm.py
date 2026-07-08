@@ -2,7 +2,7 @@
 
 Emitter
 -------
-:func:`emit_qasm` serializes any :class:`~qforge.ir.Circuit` to OpenQASM 2.0
+:func:`emit_qasm` serializes any :class:`~daedalus.ir.Circuit` to OpenQASM 2.0
 text targeting the standard ``qelib1.inc`` gate library. Registers are always
 named ``q`` and ``c``; rotation angles are emitted as plain Python floats
 (``repr``), so symbolic spellings like ``pi/4`` are lost but the value is
@@ -31,11 +31,11 @@ in the same format as the DSL parser's diagnostics.
 
 from __future__ import annotations
 
-from qforge.angles import parse_expression
-from qforge.errors import LexError, ParseError
-from qforge.ir import Circuit, Gate
-from qforge.lexer import Token, describe
-from qforge.parser import GATE_ARITY
+from daedalus.angles import parse_expression
+from daedalus.errors import LexError, ParseError
+from daedalus.ir import Circuit, Gate
+from daedalus.lexer import Token, describe
+from daedalus.parser import GATE_ARITY
 
 _ROTATIONS = ("rx", "ry", "rz")
 
@@ -193,7 +193,7 @@ def _tokenize(source: str) -> list[Token]:
 def parse_qasm(source: str) -> Circuit:
     """Parse the supported OpenQASM 2.0 subset into a :class:`Circuit`.
 
-    Raises :class:`qforge.errors.LexError` or :class:`ParseError` with a
+    Raises :class:`daedalus.errors.LexError` or :class:`ParseError` with a
     precise 1-based line/column position on anything outside the subset.
     """
     return _QasmParser(_tokenize(source)).parse_program()

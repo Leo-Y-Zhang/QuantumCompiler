@@ -4,9 +4,9 @@ import math
 
 import pytest
 
-from qforge.errors import ParseError
-from qforge.ir import Gate
-from qforge.parser import parse
+from daedalus.errors import ParseError
+from daedalus.ir import Gate
+from daedalus.parser import parse
 
 EXAMPLE = """\
 qubits 3

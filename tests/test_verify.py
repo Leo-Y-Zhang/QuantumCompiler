@@ -1,7 +1,7 @@
 """Equivalence-checker tests: equal circuits, unequal circuits, phase traps."""
 
-from qforge.parser import parse
-from qforge.verify import check_equivalence
+from daedalus.parser import parse
+from daedalus.verify import check_equivalence
 
 
 class TestEquivalent:

@@ -6,9 +6,9 @@ import random
 
 import pytest
 
-from qforge.ir import Circuit
-from qforge.parser import parse
-from qforge.sim import MAX_QUBITS, basis_state, random_state, simulate
+from daedalus.ir import Circuit
+from daedalus.parser import parse
+from daedalus.sim import MAX_QUBITS, basis_state, random_state, simulate
 
 INV_SQRT2 = 1 / math.sqrt(2)
 

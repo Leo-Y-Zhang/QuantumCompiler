@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from qforge import cli
-from qforge.verify import EquivalenceResult
+from daedalus import cli
+from daedalus.verify import EquivalenceResult
 
 PROGRAM = """\
 qubits 2
@@ -160,7 +160,7 @@ class TestQasm:
 class TestSubprocessEndToEnd:
     def run_cli(self, *args: str) -> subprocess.CompletedProcess:
         return subprocess.run(
-            [sys.executable, "-m", "qforge", *args],
+            [sys.executable, "-m", "daedalus", *args],
             capture_output=True,
             text=True,
             timeout=120,
@@ -193,7 +193,7 @@ class TestSubprocessEndToEnd:
     def test_version(self) -> None:
         result = self.run_cli("--version")
         assert result.returncode == 0
-        assert "qforge 0.2.0" in result.stdout
+        assert "daedalus 0.2.0" in result.stdout
 
     def test_usage_error_exit_2(self) -> None:
         result = self.run_cli()

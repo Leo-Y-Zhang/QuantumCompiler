@@ -13,7 +13,7 @@ With no measurements at all, every gate is dead and the circuit empties.
 
 from __future__ import annotations
 
-from qforge.ir import Circuit
+from daedalus.ir import Circuit
 
 
 class DeadCodeElimination:

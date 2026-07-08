@@ -8,7 +8,7 @@ gates on one wire have no ordering constraints against other wires.
 
 from __future__ import annotations
 
-from qforge.ir import Circuit, Gate
+from daedalus.ir import Circuit, Gate
 
 _REWRITES = {("h", "x", "h"): "z", ("h", "z", "h"): "x"}
 

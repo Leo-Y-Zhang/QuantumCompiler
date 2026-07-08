@@ -18,8 +18,8 @@ from __future__ import annotations
 import random
 from dataclasses import dataclass
 
-from qforge.ir import Circuit
-from qforge.sim import MAX_QUBITS, basis_state, random_state, simulate
+from daedalus.ir import Circuit
+from daedalus.sim import MAX_QUBITS, basis_state, random_state, simulate
 
 DEFAULT_SEED = 20260706
 DEFAULT_ATOL = 1e-9

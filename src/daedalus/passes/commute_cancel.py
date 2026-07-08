@@ -16,8 +16,8 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from qforge.ir import Circuit, Gate
-from qforge.passes.merge_rotations import is_zero_mod_two_pi
+from daedalus.ir import Circuit, Gate
+from daedalus.passes.merge_rotations import is_zero_mod_two_pi
 
 _DIAGONAL = frozenset({"z", "s", "sdg", "t", "tdg", "rz"})
 _INVERSE_PAIRS = frozenset({("z", "z"), ("s", "sdg"), ("sdg", "s"), ("t", "tdg"), ("tdg", "t")})
