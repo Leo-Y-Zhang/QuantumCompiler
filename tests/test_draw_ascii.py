@@ -1,7 +1,7 @@
 """Tests for the ASCII circuit renderer."""
 
-from qforge.draw_ascii import render_ascii
-from qforge.parser import parse
+from daedalus.draw_ascii import render_ascii
+from daedalus.parser import parse
 
 
 class TestRendering:

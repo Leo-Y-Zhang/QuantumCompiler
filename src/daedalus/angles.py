@@ -17,8 +17,8 @@ import math
 from fractions import Fraction
 from typing import Sequence
 
-from qforge.errors import ParseError
-from qforge.lexer import Token, describe, tokenize
+from daedalus.errors import ParseError
+from daedalus.lexer import Token, describe, tokenize
 
 _PI_TOLERANCE = 1e-12
 _MAX_DENOMINATOR = 8

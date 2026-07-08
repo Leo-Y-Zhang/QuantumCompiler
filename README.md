@@ -1,11 +1,14 @@
-# QForge
+# Daedalus
 
-[![CI](https://github.com/GreenPandaTech/QForge/actions/workflows/ci.yml/badge.svg)](https://github.com/GreenPandaTech/QForge/actions/workflows/ci.yml)
+[![CI](https://github.com/GreenPandaTech/Daedalus/actions/workflows/ci.yml/badge.svg)](https://github.com/GreenPandaTech/Daedalus/actions/workflows/ci.yml)
+
+*Daedalus — the master craftsman who built the Labyrinth; this one crafts
+quantum circuits and proves its rewrites never lose the way.*
 
 **A toy educational quantum-circuit compiler with *verified* optimization
 passes. Pure Python stdlib — zero runtime dependencies.**
 
-QForge compiles a small quantum-circuit DSL through a real compiler pipeline
+Daedalus compiles a small quantum-circuit DSL through a real compiler pipeline
 (lexer -> recursive-descent parser -> IR -> pass manager) and then *proves*
 its optimizations did not change the circuit's meaning, using a built-in
 statevector simulator and an up-to-global-phase equivalence check.
@@ -17,14 +20,14 @@ statevector simulator and an up-to-global-phase equivalence check.
 
 ## Why it is interesting
 
-Most toy compilers *claim* their optimizations are correct. QForge checks:
+Most toy compilers *claim* their optimizations are correct. Daedalus checks:
 every optimized circuit is re-simulated against the original on a set of
 deterministic basis states and seeded pseudo-random inputs, and must match
 up to global phase. The test suite uses the same machinery to prove each
 pass is semantics-preserving.
 
 ```
-$ qforge compile examples/rotations.qf --opt --emit ascii --verify
+$ daedalus compile examples/rotations.qf --opt --emit ascii --verify
 verify: equivalent up to global phase (max error 2.483e-16, 8 inputs)
 BEFORE:
 q0: -[RZ(pi/4)]--[RZ(pi/4)]---o---[RZ(-pi/2)]-----------------------
@@ -57,6 +60,10 @@ measure q0 -> c0
 measure q1 -> c1
 ```
 
+DSL source files use the `.qf` extension — a short, stable extension for
+quantum-circuit source that existing programs and tooling keep using
+unchanged.
+
 Gates: `h x y z s sdg t tdg rx(a) ry(a) rz(a) cx cz swap measure`.
 Angles support pi arithmetic (`pi/4`, `-pi/2`, `2*pi`) via a tiny safe
 expression evaluator — no `eval`. Parse errors carry line and column:
@@ -78,7 +85,7 @@ bad.qf:2:1: error: unknown gate 'foo'
 The pass manager runs passes to a fixpoint and reports per-pass statistics:
 
 ```
-$ qforge stats examples/bell.qf
+$ daedalus stats examples/bell.qf
 pass               iter  before  after  removed
 cancel-inverses       1       6      4        2
 merge-rotations       1       4      4        0
@@ -99,11 +106,11 @@ python -m venv .venv
 .venv/Scripts/python.exe -m pytest -q                  # 244 tests
 ```
 
-CLI (also runnable as `python -m qforge`):
+CLI (also runnable as `python -m daedalus`):
 
 ```
-qforge compile FILE [--opt] [--emit ir|ascii|svg|qasm] [--verify] [--dce] [--out FILE]
-qforge stats FILE
+daedalus compile FILE [--opt] [--emit ir|ascii|svg|qasm] [--verify] [--dce] [--out FILE]
+daedalus stats FILE
 ```
 
 Files ending in `.qasm` are parsed as OpenQASM 2.0 (see below); everything
@@ -113,7 +120,7 @@ Exit codes: `0` success (and verification passed), `1` compile/verify
 failure, `2` usage errors.
 
 SVG diagrams (committed under `examples/`, regenerable with
-`qforge compile examples/bell.qf --opt --emit svg --out ...`):
+`daedalus compile examples/bell.qf --opt --emit svg --out ...`):
 
 | before | after `--opt` |
 |---|---|
@@ -123,10 +130,10 @@ SVG diagrams (committed under `examples/`, regenerable with
 ## OpenQASM 2.0 interop
 
 Any circuit can be exported to OpenQASM 2.0 with `--emit qasm` (or
-`qforge.emit_qasm`), and `.qasm` files compile directly. Real observed run:
+`daedalus.emit_qasm`), and `.qasm` files compile directly. Real observed run:
 
 ```
-$ qforge compile examples/bell.qf --opt --verify --emit qasm
+$ daedalus compile examples/bell.qf --opt --verify --emit qasm
 verify: equivalent up to global phase (max error 0.000e+00, 8 inputs)
 OPENQASM 2.0;
 include "qelib1.inc";
@@ -138,7 +145,7 @@ measure q[0] -> c[0];
 measure q[1] -> c[1];
 ```
 
-Feeding that file back in (`qforge compile bell.qasm --emit ir`) recovers the
+Feeding that file back in (`daedalus compile bell.qasm --emit ir`) recovers the
 DSL circuit; the test suite round-trips every example program (and its
 optimized form) through QASM and re-proves equivalence with the statevector
 checker.
@@ -170,7 +177,7 @@ value bit-exactly.
 ## Architecture
 
 ```
-src/qforge/
+src/daedalus/
   lexer.py       tokenizer with line/column tracking
   parser.py      recursive-descent parser -> Circuit IR
   angles.py      safe pi-arithmetic expression evaluator (no eval)

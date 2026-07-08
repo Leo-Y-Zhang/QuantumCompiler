@@ -1,4 +1,4 @@
-"""Recursive-descent parser for the QForge DSL.
+"""Recursive-descent parser for the Daedalus DSL.
 
 Grammar (one statement per line)::
 
@@ -13,10 +13,10 @@ Every diagnostic carries the 1-based line/column of the offending token.
 
 from __future__ import annotations
 
-from qforge.angles import parse_expression
-from qforge.errors import ParseError
-from qforge.ir import Circuit, Gate
-from qforge.lexer import Token, describe, tokenize
+from daedalus.angles import parse_expression
+from daedalus.errors import ParseError
+from daedalus.ir import Circuit, Gate
+from daedalus.lexer import Token, describe, tokenize
 
 _SINGLE = ("h", "x", "y", "z", "s", "sdg", "t", "tdg")
 _ROTATIONS = ("rx", "ry", "rz")
@@ -32,7 +32,7 @@ GATE_ARITY: dict[str, int] = {
 def parse(source: str) -> Circuit:
     """Parse DSL *source* into a :class:`Circuit`.
 
-    Raises :class:`qforge.errors.LexError` or :class:`ParseError` with a
+    Raises :class:`daedalus.errors.LexError` or :class:`ParseError` with a
     precise position on invalid input.
     """
     return _Parser(tokenize(source)).parse_program()

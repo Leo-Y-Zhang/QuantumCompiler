@@ -1,8 +1,8 @@
 """Tests for the adjacent inverse-pair cancellation pass."""
 
-from qforge.parser import parse
-from qforge.passes.cancel_inverses import CancelInverses
-from qforge.verify import check_equivalence
+from daedalus.parser import parse
+from daedalus.passes.cancel_inverses import CancelInverses
+from daedalus.verify import check_equivalence
 
 PASS = CancelInverses()
 

@@ -13,9 +13,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- OpenQASM 2.0 emitter (`qforge.emit_qasm`, CLI `--emit qasm`): qelib1
+- OpenQASM 2.0 emitter (`daedalus.emit_qasm`, CLI `--emit qasm`): qelib1
   gate names, `q`/`c` registers, angles as plain floats.
-- OpenQASM 2.0 importer (`qforge.parse_qasm`) for a documented subset:
+- OpenQASM 2.0 importer (`daedalus.parse_qasm`) for a documented subset:
   single qreg + optional single creg (any names), the qelib1 gates
   h x y z s sdg t tdg rx ry rz cx cz swap, indexed operands only,
   `measure q[i] -> c[j]`, pi-arithmetic angle expressions, `//` comments.
@@ -46,6 +46,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Pure-stdlib statevector simulator (up to 10 qubits) and an equivalence
   checker (up to global phase) used for semantic verification of every pass.
 - ASCII circuit diagrams and dependency-free SVG rendering.
-- `qforge` CLI (`compile`, `stats`) with `--opt`, `--emit ir|ascii|svg`,
-  `--verify`, `--dce`, `--out`, plus `python -m qforge`.
+- `daedalus` CLI (`compile`, `stats`) with `--opt`, `--emit ir|ascii|svg`,
+  `--verify`, `--dce`, `--out`, plus `python -m daedalus`.
 - Example programs with before/after SVG renderings.

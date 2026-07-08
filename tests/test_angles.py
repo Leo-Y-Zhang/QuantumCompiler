@@ -4,8 +4,8 @@ import math
 
 import pytest
 
-from qforge.angles import evaluate, format_angle
-from qforge.errors import ParseError, QForgeError
+from daedalus.angles import evaluate, format_angle
+from daedalus.errors import ParseError, DaedalusError
 
 
 class TestEvaluate:
@@ -73,7 +73,7 @@ class TestEvaluateErrors:
 
     def test_no_eval_of_python(self) -> None:
         # Quotes are not even lexable; identifiers are rejected by the parser.
-        with pytest.raises(QForgeError):
+        with pytest.raises(DaedalusError):
             evaluate("__import__('os')")
         with pytest.raises(ParseError, match="unknown identifier"):
             evaluate("__import__")

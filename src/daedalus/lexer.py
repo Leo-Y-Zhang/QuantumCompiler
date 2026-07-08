@@ -1,4 +1,4 @@
-"""Hand-written lexer for the QForge DSL.
+"""Hand-written lexer for the Daedalus DSL.
 
 Produces a flat token list with 1-based line/column positions so the parser
 can report precise diagnostics. ``#`` starts a comment that runs to the end
@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from qforge.errors import LexError
+from daedalus.errors import LexError
 
 _SYMBOLS = {
     "(": "LPAREN",

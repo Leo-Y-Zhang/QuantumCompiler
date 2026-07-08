@@ -9,8 +9,8 @@ single-qubit gates, ``o`` controls, ``(+)`` cx targets, ``x`` swap ends,
 
 from __future__ import annotations
 
-from qforge.angles import format_angle
-from qforge.ir import Circuit, Gate
+from daedalus.angles import format_angle
+from daedalus.ir import Circuit, Gate
 
 
 def column_layout(circuit: Circuit) -> list[int]:

@@ -3,10 +3,10 @@
 import math
 import random
 
-from qforge.ir import Circuit, Gate
-from qforge.parser import parse
-from qforge.passes import PassManager, default_passes
-from qforge.verify import check_equivalence
+from daedalus.ir import Circuit, Gate
+from daedalus.parser import parse
+from daedalus.passes import PassManager, default_passes
+from daedalus.verify import check_equivalence
 
 
 def optimize(src: str):

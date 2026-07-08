@@ -8,9 +8,9 @@ from __future__ import annotations
 
 import xml.etree.ElementTree as ET
 
-from qforge.angles import format_angle
-from qforge.draw_ascii import column_layout
-from qforge.ir import Circuit, Gate
+from daedalus.angles import format_angle
+from daedalus.draw_ascii import column_layout
+from daedalus.ir import Circuit, Gate
 
 SVG_NS = "http://www.w3.org/2000/svg"
 

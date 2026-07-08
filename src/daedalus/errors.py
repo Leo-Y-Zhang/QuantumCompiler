@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 
-class QForgeError(Exception):
+class DaedalusError(Exception):
     """Base class for source-level errors with a line/column position."""
 
     def __init__(self, message: str, line: int, column: int) -> None:
@@ -17,9 +17,9 @@ class QForgeError(Exception):
         return f"{filename}:{self.line}:{self.column}: error: {self.message}"
 
 
-class LexError(QForgeError):
+class LexError(DaedalusError):
     """Raised for characters the lexer cannot tokenize."""
 
 
-class ParseError(QForgeError):
+class ParseError(DaedalusError):
     """Raised for token sequences the parser cannot accept."""

@@ -11,12 +11,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol, Sequence
 
-from qforge.ir import Circuit
-from qforge.passes.cancel_inverses import CancelInverses
-from qforge.passes.commute_cancel import CommuteCancel
-from qforge.passes.dead_code import DeadCodeElimination
-from qforge.passes.merge_rotations import MergeRotations
-from qforge.passes.peephole import Peephole
+from daedalus.ir import Circuit
+from daedalus.passes.cancel_inverses import CancelInverses
+from daedalus.passes.commute_cancel import CommuteCancel
+from daedalus.passes.dead_code import DeadCodeElimination
+from daedalus.passes.merge_rotations import MergeRotations
+from daedalus.passes.peephole import Peephole
 
 __all__ = [
     "Pass",

@@ -4,9 +4,9 @@ import math
 
 import pytest
 
-from qforge.parser import parse
-from qforge.passes.commute_cancel import CommuteCancel
-from qforge.verify import check_equivalence
+from daedalus.parser import parse
+from daedalus.passes.commute_cancel import CommuteCancel
+from daedalus.verify import check_equivalence
 
 PASS = CommuteCancel()
 

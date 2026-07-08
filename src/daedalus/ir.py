@@ -19,7 +19,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Iterable
 
-from qforge.angles import format_angle
+from daedalus.angles import format_angle
 
 
 @dataclass(frozen=True)

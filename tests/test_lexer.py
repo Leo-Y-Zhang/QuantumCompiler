@@ -2,8 +2,8 @@
 
 import pytest
 
-from qforge.errors import LexError
-from qforge.lexer import Token, tokenize
+from daedalus.errors import LexError
+from daedalus.lexer import Token, tokenize
 
 
 def kinds(tokens: list[Token]) -> list[str]:
