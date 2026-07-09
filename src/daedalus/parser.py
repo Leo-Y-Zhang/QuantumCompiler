@@ -3,10 +3,11 @@
 Grammar (one statement per line)::
 
     program   := line*
-    line      := 'qubits' INT | 'bits' INT | gate | measure
+    line      := 'qubits' INT | 'bits' INT | gate | measure | barrier
     gate      := NAME operands | NAME '(' expr ')' operands
     operands  := qubit (',' qubit)*
     measure   := 'measure' qubit '->' bit
+    barrier   := 'barrier' qubit (',' qubit)*
 
 Every diagnostic carries the 1-based line/column of the offending token.
 """
@@ -108,6 +109,8 @@ class _Parser:
                     )
                 if token.text == "measure":
                     gates.append(self.parse_measure(num_qubits, num_bits))
+                elif token.text == "barrier":
+                    gates.append(self.parse_barrier(num_qubits))
                 else:
                     gates.append(self.parse_gate(num_qubits))
             self.end_statement()
@@ -195,6 +198,20 @@ class _Parser:
         self.advance()
         bit = self.parse_register("c", num_bits, "bit", "bits")
         return Gate("measure", (qubit,), bit=bit)
+
+    def parse_barrier(self, num_qubits: int) -> Gate:
+        self.advance()  # 'barrier'
+        qubits = [self.parse_qubit(num_qubits)]
+        while self.peek().kind == "COMMA":
+            self.advance()
+            operand = self.peek()
+            qubit = self.parse_qubit(num_qubits)
+            if qubit in qubits:
+                raise ParseError(
+                    f"duplicate qubit operand 'q{qubit}'", operand.line, operand.column
+                )
+            qubits.append(qubit)
+        return Gate("barrier", tuple(qubits))
 
     def parse_qubit(self, num_qubits: int) -> int:
         return self.parse_register("q", num_qubits, "qubit", "qubits")
