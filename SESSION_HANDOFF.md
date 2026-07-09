@@ -9,21 +9,20 @@ Program: repo max-upgrades #3 (after Hephaestus, Helios). Spec:
 - [x] Step 1 — Exact unitary proof engine (`unitary.py`, `--proof`)
 - [x] Step 2 — New verified passes (canonicalize-rotations, commute x-basis, control-flip)
 - [x] Step 3 — Topology + verified routing (crown jewel) + route CLI
-- [ ] Step 4 — Resource analysis + DAG export
+- [x] Step 4 — Resource analysis + DAG export (analyze.py, dot.py, --emit dot, `analyze`)
 - [x] Step 5 — `barrier` optimization fence (parse/dump/sim/draw/qasm + all passes respect it)
 - [x] Step 6 — Showcase / examples / README overhaul + CHANGELOG + version 1.0.0
-- [ ] Step 7 — Adversarial 3-lens review (Workflow) + fix confirmed
+- [x] Step 7 — Adversarial 3-lens review (Workflow): 3 findings, all confirmed + fixed
 - [ ] Step 8 — merge --no-ff to main, tag v1.0.0, push, CI green
 
-Tests: 251 baseline -> 382 now. Default pipeline order: cancel-inverses,
+Tests: 251 baseline -> 398 now. Default pipeline order: cancel-inverses,
 merge-rotations, peephole, control-flip, commute-cancel, canonicalize-rotations.
 New modules: unitary.py, topology.py, route.py, analyze.py, dot.py.
 CLI subcommands: compile, stats, route, analyze. barrier is a fence gate.
+Review fixes: router now preserves multi-qubit barriers; +DCE/route barrier tests.
 
 ## Exact next step
-Begin Step 7: adversarial 3-lens Workflow review (quantum-correctness,
-compiler-soundness, code-quality/honesty), verify each finding, fix confirmed.
-Then Step 8: merge --no-ff to main, tag v1.0.0, push, confirm CI green.
+Step 8: merge --no-ff to main, tag v1.0.0, push, confirm CI green.
 
 ## Verify commands
 ```

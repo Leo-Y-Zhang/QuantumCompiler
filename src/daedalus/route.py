@@ -65,6 +65,12 @@ def route(circuit: Circuit, coupling: CouplingMap) -> RoutingResult:
             routed.append(Gate(gate.name, (phys[a], phys[b])))
         elif gate.name == "measure":
             routed.append(Gate("measure", (phys[gate.qubits[0]],), bit=gate.bit))
+        elif gate.name == "barrier":
+            # A fence can span any number of wires; relabel every operand so the
+            # full barrier survives routing (the single-qubit branch would drop
+            # all but the first, and the equivalence check cannot see it because
+            # a barrier simulates as identity).
+            routed.append(Gate("barrier", tuple(phys[q] for q in gate.qubits)))
         else:
             routed.append(Gate(gate.name, (phys[gate.qubits[0]],), angle=gate.angle))
 
