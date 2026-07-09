@@ -7,7 +7,7 @@ name = "daedalus"
 version = "1.0.0"
 description = "Toy educational quantum-circuit DSL compiler with verified optimization passes. Python stdlib only."
 readme = "README.md"
-license = "MIT"
+license = { text = "Proprietary - All Rights Reserved" }
 authors = [{ name = "GreenPandaTech" }]
 requires-python = ">=3.10"
 dependencies = []
