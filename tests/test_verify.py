@@ -1,7 +1,7 @@
 """Equivalence-checker tests: equal circuits, unequal circuits, phase traps."""
 
 from daedalus.parser import parse
-from daedalus.verify import check_equivalence
+from daedalus.verify import check_equivalence, prove_equivalence
 
 
 class TestEquivalent:
@@ -74,3 +74,37 @@ class TestDeterminism:
         r1 = check_equivalence(a, b)
         r2 = check_equivalence(a, b)
         assert (r1.equivalent, r1.max_error) == (r2.equivalent, r2.max_error)
+
+
+class TestProveEquivalence:
+    def test_small_circuit_uses_exact_engine(self) -> None:
+        a = parse("qubits 2\nh q0\nx q1\nx q1\ncx q0, q1\n")
+        b = parse("qubits 2\nh q0\ncx q0, q1\n")
+        result = prove_equivalence(a, b)
+        assert result.equivalent
+        assert result.method == "exact-unitary"
+        assert result.process_fidelity is not None
+        assert result.process_fidelity > 1.0 - 1e-9
+
+    def test_large_circuit_falls_back_to_randomized(self) -> None:
+        big = parse("qubits 8\nh q0\ncx q0, q1\n")
+        result = prove_equivalence(big, big)
+        assert result.equivalent
+        assert result.method == "randomized"
+        assert result.process_fidelity is None
+
+    def test_exact_catches_wrong_rewrite(self) -> None:
+        result = prove_equivalence(parse("qubits 1\nh q0\n"), parse("qubits 1\nx q0\n"))
+        assert not result.equivalent
+        assert result.method == "exact-unitary"
+
+    def test_qubit_count_mismatch(self) -> None:
+        result = prove_equivalence(parse("qubits 1\n"), parse("qubits 2\n"))
+        assert not result.equivalent
+        assert "qubit" in result.detail
+
+    def test_summary_mentions_method(self) -> None:
+        exact = prove_equivalence(parse("qubits 1\nh q0\n"), parse("qubits 1\nh q0\n"))
+        assert "exact" in exact.summary().lower()
+        rand = prove_equivalence(parse("qubits 8\n"), parse("qubits 8\n"))
+        assert "random" in rand.summary().lower()

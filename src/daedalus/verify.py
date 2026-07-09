@@ -20,6 +20,7 @@ from dataclasses import dataclass
 
 from daedalus.ir import Circuit
 from daedalus.sim import MAX_QUBITS, basis_state, random_state, simulate
+from daedalus.unitary import PROOF_MAX_QUBITS, prove_circuit_equivalence
 
 DEFAULT_SEED = 20260706
 DEFAULT_ATOL = 1e-9
@@ -70,6 +71,86 @@ def check_equivalence(
         max_error=max_error,
         inputs_checked=len(inputs),
         detail="" if equivalent else "outputs differ beyond tolerance",
+    )
+
+
+@dataclass(frozen=True)
+class ProofResult:
+    """A verification verdict plus the method used to reach it.
+
+    ``method`` is ``"exact-unitary"`` when both circuits were small enough to
+    materialize the full unitary (a genuine up-to-global-phase proof) or
+    ``"randomized"`` when the sampled oracle was used instead. ``max_error`` is
+    the aligned Frobenius difference norm for the exact method, or the maximum
+    sampled amplitude error for the randomized one. ``process_fidelity`` is set
+    only for the exact method.
+    """
+
+    equivalent: bool
+    method: str
+    max_error: float
+    inputs_checked: int
+    process_fidelity: float | None = None
+    detail: str = ""
+
+    def summary(self) -> str:
+        """One-line human-readable verdict for the CLI."""
+        verb = "equivalent up to global phase" if self.equivalent else "NOT equivalent"
+        if self.method == "exact-unitary":
+            fidelity = self.process_fidelity if self.process_fidelity is not None else 0.0
+            return (
+                f"proof: exact unitary check, {verb} "
+                f"(diff norm {self.max_error:.3e}, process fidelity {fidelity:.10f}, "
+                f"dimension {self.inputs_checked})"
+            )
+        return (
+            f"proof: randomized check, {verb} "
+            f"(max error {self.max_error:.3e}, {self.inputs_checked} inputs; "
+            "circuit too large for an exact unitary proof)"
+        )
+
+
+def prove_equivalence(
+    original: Circuit,
+    optimized: Circuit,
+    *,
+    num_random: int = 4,
+    seed: int = DEFAULT_SEED,
+    atol: float = DEFAULT_ATOL,
+) -> ProofResult:
+    """Prove equivalence exactly when small, else via the randomized oracle.
+
+    Uses the exact unitary engine when both circuits share a qubit count within
+    :data:`~daedalus.unitary.PROOF_MAX_QUBITS`; otherwise falls back to
+    :func:`check_equivalence`. Either way the verdict is up to global phase.
+    """
+    if original.num_qubits != optimized.num_qubits:
+        return ProofResult(
+            equivalent=False,
+            method="exact-unitary",
+            max_error=float("inf"),
+            inputs_checked=0,
+            detail="qubit counts differ",
+        )
+    if original.num_qubits <= PROOF_MAX_QUBITS:
+        comparison = prove_circuit_equivalence(original, optimized, atol=atol)
+        return ProofResult(
+            equivalent=comparison.equivalent,
+            method="exact-unitary",
+            max_error=comparison.diff_norm,
+            inputs_checked=comparison.dimension,
+            process_fidelity=comparison.process_fidelity,
+            detail="" if comparison.equivalent else "unitaries differ beyond tolerance",
+        )
+    randomized = check_equivalence(
+        original, optimized, num_random=num_random, seed=seed, atol=atol
+    )
+    return ProofResult(
+        equivalent=randomized.equivalent,
+        method="randomized",
+        max_error=randomized.max_error,
+        inputs_checked=randomized.inputs_checked,
+        detail=randomized.detail,
     )
 
 
