@@ -4,7 +4,7 @@ Layout uses greedy moment scheduling: each gate is placed in the earliest
 column that is free on every wire in its qubit *span* (min..max), so vertical
 connectors never collide with other gates. Symbols: ``[H]`` boxes for
 single-qubit gates, ``o`` controls, ``(+)`` cx targets, ``x`` swap ends,
-``[M->c0]`` measures, and ``|`` vertical connectors.
+``[M->c0]`` measures, ``:`` barrier fences, and ``|`` vertical connectors.
 """
 
 from __future__ import annotations
@@ -30,6 +30,8 @@ def gate_cells(gate: Gate) -> dict[int, str]:
     """Per-qubit diagram symbol for *gate* (deterministic)."""
     if gate.name == "measure":
         return {gate.qubits[0]: f"[M->c{gate.bit}]"}
+    if gate.name == "barrier":
+        return dict.fromkeys(gate.qubits, ":")
     if gate.name == "cx":
         control, target = gate.qubits
         return {control: "o", target: "(+)"}
@@ -55,7 +57,7 @@ def render_ascii(circuit: Circuit) -> str:
     for gate, column in zip(circuit.gates, columns, strict=True):
         for q, text in gate_cells(gate).items():
             content[2 * q][column] = text
-        if len(gate.qubits) > 1:
+        if len(gate.qubits) > 1 and gate.name != "barrier":
             lo, hi = min(gate.qubits), max(gate.qubits)
             for row in range(2 * lo + 1, 2 * hi):
                 connector.add((row, column))

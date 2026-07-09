@@ -18,6 +18,11 @@ class TestRendering:
         assert lines[0].startswith("q0: ")
         assert lines[2].startswith("q1: ")
 
+    def test_barrier_fence_symbol(self) -> None:
+        lines = render_ascii(parse("qubits 2\nh q0\nbarrier q0, q1\n")).splitlines()
+        assert ":" in lines[0]  # fence mark on q0's wire
+        assert ":" in lines[2]  # and on q1's wire
+
     def test_gate_labels_present(self) -> None:
         src = "qubits 2\nbits 1\nh q0\nrz(pi/4) q0\nmeasure q0 -> c0\n"
         out = render_ascii(parse(src))

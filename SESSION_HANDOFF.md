@@ -10,18 +10,19 @@ Program: repo max-upgrades #3 (after Hephaestus, Helios). Spec:
 - [x] Step 2 — New verified passes (canonicalize-rotations, commute x-basis, control-flip)
 - [x] Step 3 — Topology + verified routing (crown jewel) + route CLI
 - [ ] Step 4 — Resource analysis + DAG export
-- [ ] Step 5 — `barrier` optimization fence
+- [x] Step 5 — `barrier` optimization fence (parse/dump/sim/draw/qasm + all passes respect it)
 - [ ] Step 6 — Showcase / examples / README overhaul
 - [ ] Step 7 — Adversarial 3-lens review (Workflow) + fix confirmed
 - [ ] Step 8 — merge --no-ff to main, tag v1.0.0, push, CI green
 
-Tests: 251 baseline -> 348 now. Default pipeline order: cancel-inverses,
+Tests: 251 baseline -> 382 now. Default pipeline order: cancel-inverses,
 merge-rotations, peephole, control-flip, commute-cancel, canonicalize-rotations.
-New modules: unitary.py, topology.py, route.py.
+New modules: unitary.py, topology.py, route.py, analyze.py, dot.py.
+CLI subcommands: compile, stats, route, analyze. barrier is a fence gate.
 
 ## Exact next step
-Begin Step 4: analyze.py (depth/T-count/histogram) + dot.py (DAG export) +
-`analyze` CLI subcommand + `--emit dot` + stats depth line. TDD.
+Begin Step 6: new examples (qft3.qf, routing demo, clifford+t demo), regenerate
+SVGs, full README overhaul, CHANGELOG 1.0.0, bump version to 1.0.0.
 
 ## Verify commands
 ```

@@ -120,7 +120,7 @@ class TestImporterErrors:
             ("qreg q[1];\n", 1, 1, "expected 'OPENQASM 2.0;' header"),
             ("OPENQASM 3.0;\n", 1, 10, "only OPENQASM 2.0 is supported"),
             ('OPENQASM 2.0;\ninclude "other.inc";\n', 2, 9, 'only include "qelib1.inc"'),
-            (PRELUDE + "barrier q;\n", 5, 1, "'barrier' is not supported"),
+            (PRELUDE + "barrier q;\n", 5, 10, "whole-register operands are not supported"),
             (PRELUDE + "if (c == 1) x q[0];\n", 5, 1, "'if' statements are not supported"),
             (PRELUDE + "gate foo a { x a; }\n", 5, 1, "user-defined gates are not supported"),
             (PRELUDE + "opaque foo a;\n", 5, 1, "'opaque' declarations are not supported"),
@@ -161,9 +161,9 @@ class TestImporterErrors:
 
     def test_error_formats_like_dsl_errors(self) -> None:
         with pytest.raises(ParseError) as excinfo:
-            parse_qasm(PRELUDE + "barrier q;\n")
+            parse_qasm(PRELUDE + "reset q[0];\n")
         assert excinfo.value.format("bad.qasm") == (
-            "bad.qasm:5:1: error: 'barrier' is not supported"
+            "bad.qasm:5:1: error: 'reset' is not supported"
         )
 
 

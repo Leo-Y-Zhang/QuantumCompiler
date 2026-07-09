@@ -15,7 +15,7 @@ from daedalus.draw_ascii import column_layout
 from daedalus.ir import Circuit
 
 _TWO_QUBIT = frozenset({"cx", "cz", "swap"})
-_NON_OP = frozenset({"measure"})
+_NON_OP = frozenset({"measure", "barrier"})
 
 
 @dataclass(frozen=True)
