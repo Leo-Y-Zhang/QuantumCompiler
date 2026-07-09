@@ -27,7 +27,7 @@ def render_svg(circuit: Circuit) -> str:
     columns = column_layout(circuit)
     num_columns = max(columns, default=-1) + 1
     widths = [40.0] * num_columns
-    for gate, column in zip(circuit.gates, columns):
+    for gate, column in zip(circuit.gates, columns, strict=True):
         label = _box_label(gate)
         if label is not None:
             widths[column] = max(widths[column], len(label) * _CHAR_WIDTH + 18.0)
@@ -54,12 +54,18 @@ def render_svg(circuit: Circuit) -> str:
     ET.SubElement(
         root,
         "rect",
-        {"x": "0", "y": "0", "width": _fmt(total_width), "height": _fmt(total_height), "fill": "#ffffff"},
+        {
+            "x": "0",
+            "y": "0",
+            "width": _fmt(total_width),
+            "height": _fmt(total_height),
+            "fill": "#ffffff",
+        },
     )
     for q in range(circuit.num_qubits):
         y = _wire_y(q)
-        label = ET.SubElement(root, "text", {"x": "8", "y": _fmt(y + 4), "fill": _INK})
-        label.text = f"q{q}"
+        wire_label = ET.SubElement(root, "text", {"x": "8", "y": _fmt(y + 4), "fill": _INK})
+        wire_label.text = f"q{q}"
         ET.SubElement(
             root,
             "line",
@@ -72,7 +78,7 @@ def render_svg(circuit: Circuit) -> str:
                 "stroke-width": "1",
             },
         )
-    for gate, column in zip(circuit.gates, columns):
+    for gate, column in zip(circuit.gates, columns, strict=True):
         _draw_gate(root, gate, centers[column])
     body = ET.tostring(root, encoding="unicode")
     return '<?xml version="1.0" encoding="UTF-8"?>\n' + body + "\n"
@@ -86,7 +92,7 @@ def _box_label(gate: Gate) -> str | None:
     """Text label for box-style gates; ``None`` for symbol-style gates."""
     if gate.name == "measure":
         return f"M->c{gate.bit}"
-    if gate.name in ("cx", "cz", "swap"):
+    if gate.name in ("cx", "cz", "swap", "barrier"):
         return None
     label = gate.name.upper()
     if gate.angle is not None:
@@ -100,6 +106,9 @@ def _draw_gate(root: ET.Element, gate: Gate, cx: float) -> None:
         _draw_box(root, cx, _wire_y(gate.qubits[0]), label)
         return
     ys = [_wire_y(q) for q in gate.qubits]
+    if gate.name == "barrier":
+        _dashed_line(root, cx, min(ys) - _BOX_HEIGHT / 2, cx, max(ys) + _BOX_HEIGHT / 2)
+        return
     _line(root, cx, min(ys), cx, max(ys))
     if gate.name == "cx":
         _dot(root, cx, ys[0])
@@ -151,6 +160,22 @@ def _line(root: ET.Element, x1: float, y1: float, x2: float, y2: float) -> None:
     )
 
 
+def _dashed_line(root: ET.Element, x1: float, y1: float, x2: float, y2: float) -> None:
+    ET.SubElement(
+        root,
+        "line",
+        {
+            "x1": _fmt(x1),
+            "y1": _fmt(y1),
+            "x2": _fmt(x2),
+            "y2": _fmt(y2),
+            "stroke": "#8a94a6",
+            "stroke-width": "1.5",
+            "stroke-dasharray": "4 3",
+        },
+    )
+
+
 def _dot(root: ET.Element, cx: float, cy: float) -> None:
     ET.SubElement(
         root, "circle", {"cx": _fmt(cx), "cy": _fmt(cy), "r": "4", "fill": _INK}
@@ -161,7 +186,14 @@ def _target_ring(root: ET.Element, cx: float, cy: float) -> None:
     ET.SubElement(
         root,
         "circle",
-        {"cx": _fmt(cx), "cy": _fmt(cy), "r": "9", "fill": "none", "stroke": _INK, "stroke-width": "1.5"},
+        {
+            "cx": _fmt(cx),
+            "cy": _fmt(cy),
+            "r": "9",
+            "fill": "none",
+            "stroke": _INK,
+            "stroke-width": "1.5",
+        },
     )
     _line(root, cx - 9, cy, cx + 9, cy)
     _line(root, cx, cy - 9, cx, cy + 9)

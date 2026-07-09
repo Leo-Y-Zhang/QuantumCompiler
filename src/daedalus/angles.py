@@ -14,8 +14,8 @@ so expressions cannot reach Python execution by construction.
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from fractions import Fraction
-from typing import Sequence
 
 from daedalus.errors import ParseError
 from daedalus.lexer import Token, describe, tokenize
