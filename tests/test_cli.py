@@ -241,12 +241,12 @@ class TestQasm:
     def test_qasm_syntax_error_position(self, tmp_path: Path, capsys) -> None:
         bad = tmp_path / "bad.qasm"
         bad.write_text(
-            'OPENQASM 2.0;\nqreg q[1];\nbarrier q;\n', encoding="ascii"
+            'OPENQASM 2.0;\nqreg q[1];\nreset q[0];\n', encoding="ascii"
         )
         assert cli.main(["compile", str(bad)]) == 2
         err = capsys.readouterr().err
         assert "bad.qasm:3:1: error:" in err
-        assert "barrier" in err
+        assert "reset" in err
 
     def test_emit_qasm_zero_qubits_exit_2(self, tmp_path: Path, capsys) -> None:
         empty = tmp_path / "empty.qf"

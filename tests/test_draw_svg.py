@@ -53,6 +53,15 @@ class TestContent:
         circles = root.findall(f".//{SVG_NS}circle")
         assert len(circles) >= 2  # control dot + target ring
 
+    def test_barrier_is_dashed_line(self) -> None:
+        root = render_root("qubits 2\nh q0\nbarrier q0, q1\n")
+        dashed = [
+            line
+            for line in root.findall(f".//{SVG_NS}line")
+            if line.get("stroke-dasharray")
+        ]
+        assert len(dashed) == 1
+
     def test_deterministic_output(self) -> None:
         a = render_svg(parse(SRC))
         b = render_svg(parse(SRC))
