@@ -42,6 +42,17 @@ class TestLiveness:
         )
         assert names(src) == ["h", "cx", "measure"]
 
+    def test_barrier_does_not_keep_dead_qubit_alive(self) -> None:
+        # A barrier is a fence, not a data interaction: sharing only a barrier
+        # with a measured qubit must NOT resurrect an otherwise-dead qubit.
+        src = "qubits 2\nbits 1\nx q1\nbarrier q0, q1\nmeasure q0 -> c0\n"
+        assert names(src) == ["barrier", "measure"]  # x q1 dropped, barrier kept
+
+    def test_real_gate_across_barrier_still_keeps_qubit_live(self) -> None:
+        # Only barriers are skipped for liveness; a real cx still connects wires.
+        src = "qubits 2\nbits 1\nh q1\nbarrier q0, q1\ncx q1, q0\nmeasure q0 -> c0\n"
+        assert names(src) == ["h", "barrier", "cx", "measure"]
+
 
 class TestCaveat:
     def test_dce_changes_unobserved_state(self) -> None:
