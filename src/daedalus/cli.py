@@ -23,7 +23,7 @@ from daedalus.ir import Circuit, dump
 from daedalus.parser import parse
 from daedalus.passes import DeadCodeElimination, PassManager, PassStats, default_passes
 from daedalus.qasm import emit_qasm, parse_qasm
-from daedalus.verify import check_equivalence
+from daedalus.verify import check_equivalence, prove_equivalence
 
 _DCE_WARNING = (
     "warning: dead-code elimination changes unobserved state; "
@@ -58,7 +58,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
     compile_parser.add_argument(
         "--verify",
         action="store_true",
-        help="check optimized-vs-original equivalence up to global phase",
+        help="check optimized-vs-original equivalence up to global phase (randomized)",
+    )
+    compile_parser.add_argument(
+        "--proof",
+        action="store_true",
+        help="prove equivalence exactly via the full unitary when small enough, "
+        "else randomized; reports the difference norm and process fidelity",
     )
     compile_parser.add_argument(
         "--dce",
@@ -105,7 +111,13 @@ def _run_compile(args: argparse.Namespace, original: Circuit) -> int:
     optimized = original
     if args.opt:
         optimized, _ = PassManager(default_passes()).run(original)
-    if args.verify:
+    if args.proof:
+        proof = prove_equivalence(original, optimized)
+        print(proof.summary(), file=sys.stderr)
+        if not proof.equivalent:
+            print("refusing to emit a non-equivalent circuit", file=sys.stderr)
+            return 3
+    elif args.verify:
         result = check_equivalence(original, optimized)
         if not result.equivalent:
             print(
@@ -120,7 +132,7 @@ def _run_compile(args: argparse.Namespace, original: Circuit) -> int:
             file=sys.stderr,
         )
     if args.dce:
-        if args.verify:
+        if args.verify or args.proof:
             print(_DCE_WARNING, file=sys.stderr)
         optimized = DeadCodeElimination().run(optimized)
     try:
