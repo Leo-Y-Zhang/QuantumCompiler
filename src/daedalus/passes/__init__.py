@@ -1,9 +1,15 @@
 """Pass manager: run passes to fixpoint with before/after statistics.
 
-Termination: every pass either leaves the gate list unchanged or strictly
-shrinks it (cancellation, merging, and 3->1 rewrites never add gates), so the
-fixpoint loop terminates after at most ``len(gates) + 1`` iterations;
-``max_iterations`` is a defensive bound on top of that.
+Termination: no pass ever adds a gate, so the gate count is non-increasing. The
+only pass that can rewrite without shrinking is ``canonicalize-rotations``,
+which renames a special-angle rotation to a named Clifford+T gate. Order the
+lexicographic measure ``(len(gates), number of special-angle rotations)``: any
+gate-count reduction lowers the first component, and any equal-length change
+(canonicalize renaming a rotation) strictly lowers the second while never
+raising it. Creation of a fresh special-angle rotation (merge or peephole)
+always coincides with a strict length decrease, so the measure is bounded below
+and strictly decreases on every change: the loop reaches a fixpoint.
+``max_iterations`` is a defensive bound on top of that argument.
 """
 
 from __future__ import annotations
@@ -14,6 +20,7 @@ from typing import Protocol
 
 from daedalus.ir import Circuit
 from daedalus.passes.cancel_inverses import CancelInverses
+from daedalus.passes.canonicalize_rotations import CanonicalizeRotations
 from daedalus.passes.commute_cancel import CommuteCancel
 from daedalus.passes.dead_code import DeadCodeElimination
 from daedalus.passes.merge_rotations import MergeRotations
@@ -21,6 +28,7 @@ from daedalus.passes.peephole import Peephole
 
 __all__ = [
     "CancelInverses",
+    "CanonicalizeRotations",
     "CommuteCancel",
     "DeadCodeElimination",
     "MergeRotations",
@@ -77,8 +85,18 @@ class PassManager:
 
 
 def default_passes(dce: bool = False) -> list[Pass]:
-    """The standard pipeline; dead-code elimination only when *dce* is True."""
-    passes: list[Pass] = [CancelInverses(), MergeRotations(), Peephole(), CommuteCancel()]
+    """The standard pipeline; dead-code elimination only when *dce* is True.
+
+    ``canonicalize-rotations`` runs last so the peephole pass sees raw
+    ``rz``/``rx``/``ry`` before any are frozen into named Clifford+T gates.
+    """
+    passes: list[Pass] = [
+        CancelInverses(),
+        MergeRotations(),
+        Peephole(),
+        CommuteCancel(),
+        CanonicalizeRotations(),
+    ]
     if dce:
         passes.append(DeadCodeElimination())
     return passes
