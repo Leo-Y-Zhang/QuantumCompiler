@@ -168,7 +168,9 @@ class TestImporterErrors:
 
 
 class TestRoundtrip:
-    @pytest.mark.parametrize("name", ["bell", "ghz", "rotations"])
+    @pytest.mark.parametrize(
+        "name", ["bell", "ghz", "rotations", "qft3", "clifford_t", "routed_line"]
+    )
     def test_examples_roundtrip_structurally_and_semantically(self, name: str) -> None:
         source = (EXAMPLES / f"{name}.qf").read_text(encoding="ascii")
         original = parse(source)

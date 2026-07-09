@@ -1,0 +1,29 @@
+# 3-qubit Quantum Fourier Transform, written in the elementary gate set.
+# Each controlled-phase CP(theta) is decomposed into two rz's and two cx's:
+#   CP(theta) = rz(theta/2)_c rz(theta/2)_t cx rz(-theta/2)_t cx
+# test_examples.py proves this circuit's unitary equals the 8-point DFT matrix
+# up to global phase. q0 is the least-significant qubit; the final swap performs
+# the QFT's bit-reversal.
+qubits 3
+# H on the top qubit, then phase-rotate it by the lower qubits.
+h q2
+rz(pi/4) q1
+rz(pi/4) q2
+cx q1, q2
+rz(-pi/4) q2
+cx q1, q2
+rz(pi/8) q0
+rz(pi/8) q2
+cx q0, q2
+rz(-pi/8) q2
+cx q0, q2
+# H on the middle qubit, phase-rotated by the bottom qubit.
+h q1
+rz(pi/4) q0
+rz(pi/4) q1
+cx q0, q1
+rz(-pi/4) q1
+cx q0, q1
+# H on the bottom qubit; then reverse the bit order.
+h q0
+swap q0, q2
