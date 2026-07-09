@@ -1,5 +1,6 @@
 """Pass-manager tests: fixpoint behavior, stats, and full-pipeline verification."""
 
+import itertools
 import math
 import random
 
@@ -22,7 +23,7 @@ class TestFixpoint:
         assert max(s.iteration for s in stats) >= 2
 
     def test_fixpoint_terminates_on_already_optimal(self) -> None:
-        circuit, stats = optimize("qubits 2\nh q0\ncx q0, q1\n")
+        circuit, _ = optimize("qubits 2\nh q0\ncx q0, q1\n")
         assert [g.name for g in circuit.gates] == ["h", "cx"]
 
     def test_stats_chain_is_consistent(self) -> None:
@@ -30,7 +31,7 @@ class TestFixpoint:
         for s in stats:
             assert s.gates_after <= s.gates_before
         # Consecutive entries chain: after of one == before of the next.
-        for a, b in zip(stats, stats[1:]):
+        for a, b in itertools.pairwise(stats):
             assert a.gates_after == b.gates_before
 
     def test_deterministic(self) -> None:

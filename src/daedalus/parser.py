@@ -24,8 +24,8 @@ _PAIRS = ("cx", "cz", "swap")
 
 #: Gate name -> number of qubit operands (measure is handled separately).
 GATE_ARITY: dict[str, int] = {
-    **{name: 1 for name in _SINGLE + _ROTATIONS},
-    **{name: 2 for name in _PAIRS},
+    **dict.fromkeys(_SINGLE + _ROTATIONS, 1),
+    **dict.fromkeys(_PAIRS, 2),
 }
 
 
