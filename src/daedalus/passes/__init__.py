@@ -22,6 +22,7 @@ from daedalus.ir import Circuit
 from daedalus.passes.cancel_inverses import CancelInverses
 from daedalus.passes.canonicalize_rotations import CanonicalizeRotations
 from daedalus.passes.commute_cancel import CommuteCancel
+from daedalus.passes.control_flip import ControlFlip
 from daedalus.passes.dead_code import DeadCodeElimination
 from daedalus.passes.merge_rotations import MergeRotations
 from daedalus.passes.peephole import Peephole
@@ -30,6 +31,7 @@ __all__ = [
     "CancelInverses",
     "CanonicalizeRotations",
     "CommuteCancel",
+    "ControlFlip",
     "DeadCodeElimination",
     "MergeRotations",
     "Pass",
@@ -94,6 +96,7 @@ def default_passes(dce: bool = False) -> list[Pass]:
         CancelInverses(),
         MergeRotations(),
         Peephole(),
+        ControlFlip(),
         CommuteCancel(),
         CanonicalizeRotations(),
     ]
