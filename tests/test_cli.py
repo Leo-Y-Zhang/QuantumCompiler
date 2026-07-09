@@ -94,6 +94,54 @@ class TestCompile:
         assert "dead-code" in capsys.readouterr().err
 
 
+class TestRoute:
+    @pytest.fixture()
+    def far(self, tmp_path: Path) -> Path:
+        path = tmp_path / "far.qf"
+        path.write_text("qubits 3\nh q0\ncx q0, q2\n", encoding="ascii")
+        return path
+
+    def test_route_line_inserts_swap_and_verifies(self, far: Path, capsys) -> None:
+        assert cli.main(["route", str(far), "--coupling", "line", "--verify"]) == 0
+        out = capsys.readouterr()
+        assert "1 swap(s) added" in out.err
+        assert "equivalent up to the final layout" in out.err
+        assert "final layout" in out.err
+        assert "[X]" in out.out or "(+)" in out.out
+
+    def test_route_full_needs_no_swaps(self, far: Path, capsys) -> None:
+        assert cli.main(["route", str(far), "--coupling", "full"]) == 0
+        assert "0 swap(s) added" in capsys.readouterr().err
+
+    def test_route_grid_spec(self, far: Path, capsys) -> None:
+        assert cli.main(["route", str(far), "--coupling", "grid:2x2"]) == 0
+        assert "swap(s) added" in capsys.readouterr().err
+
+    def test_route_emit_qasm_to_file(self, far: Path, tmp_path: Path) -> None:
+        out_file = tmp_path / "routed.qasm"
+        code = cli.main(
+            ["route", str(far), "--coupling", "line", "--emit", "qasm", "--out", str(out_file)]
+        )
+        assert code == 0
+        assert out_file.read_text(encoding="ascii").startswith("OPENQASM 2.0;")
+
+    def test_route_bad_coupling_exit_2(self, far: Path, capsys) -> None:
+        assert cli.main(["route", str(far), "--coupling", "banana"]) == 2
+        assert "unknown coupling" in capsys.readouterr().err
+
+    def test_route_too_small_map_exit_2(self, far: Path, capsys) -> None:
+        assert cli.main(["route", str(far), "--coupling", "line:2"]) == 2
+        assert "qubits" in capsys.readouterr().err
+
+    def test_route_verify_failure_exits_3(self, far: Path, capsys, monkeypatch) -> None:
+        from daedalus.verify import EquivalenceResult
+
+        failed = EquivalenceResult(equivalent=False, max_error=1.0, inputs_checked=8)
+        monkeypatch.setattr(cli, "check_routing_equivalence", lambda *a, **k: failed)
+        assert cli.main(["route", str(far), "--coupling", "line", "--verify"]) == 3
+        assert "changed semantics" in capsys.readouterr().err
+
+
 class TestErrors:
     def test_syntax_error_exit_2_with_position(self, tmp_path: Path, capsys) -> None:
         bad = tmp_path / "bad.qf"
