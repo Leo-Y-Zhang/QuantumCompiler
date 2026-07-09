@@ -272,4 +272,4 @@ examples are synthetic.
 
 ## License
 
-MIT. Copyright (c) 2026 GreenPandaTech. See `LICENSE`.
+Proprietary - All Rights Reserved (c) 2026 GreenPandaTech - portfolio viewing only.
