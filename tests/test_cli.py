@@ -291,7 +291,7 @@ class TestSubprocessEndToEnd:
     def test_version(self) -> None:
         result = self.run_cli("--version")
         assert result.returncode == 0
-        assert "daedalus 0.2.0" in result.stdout
+        assert "daedalus 1.0.0" in result.stdout
 
     def test_usage_error_exit_2(self) -> None:
         result = self.run_cli()

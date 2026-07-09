@@ -1,34 +1,42 @@
-# Daedalus - a toy quantum-circuit compiler whose optimizations are proven correct by simulation
+# Daedalus — a toy quantum-circuit compiler whose optimizations are proven correct by simulation
 
 [![CI](https://github.com/GreenPandaTech/Daedalus/actions/workflows/ci.yml/badge.svg)](https://github.com/GreenPandaTech/Daedalus/actions/workflows/ci.yml)
 
 *Daedalus — the master craftsman who built the Labyrinth; this one crafts
 quantum circuits and proves its rewrites never lose the way.*
 
-**A toy educational quantum-circuit DSL compiler with *verified* optimization
-passes. Pure Python stdlib — zero runtime dependencies.**
+**A toy educational quantum-circuit DSL compiler with *verified* optimization,
+an *exact* unitary proof mode, and a *verified* SWAP-insertion router. Pure
+Python stdlib — zero runtime dependencies.**
 
 Daedalus compiles a small quantum-circuit DSL through a real compiler pipeline
-(lexer -> recursive-descent parser -> IR -> pass manager) and then *proves*
-its optimizations did not change the circuit's meaning, using a built-in
-statevector simulator and an up-to-global-phase equivalence check.
+(lexer → recursive-descent parser → IR → pass manager), *proves* its
+optimizations did not change the circuit's meaning, and can then route it onto a
+hardware coupling map — proving *that* correct too. The spine of the whole
+project is one idea: **nothing is trusted that the equivalence oracle cannot
+certify.**
 
-> **Honest framing:** this is a toy compiler for learning and portfolio
-> purposes. It has a real compiler architecture and simulation-verified
-> rewrites, but it is not a production quantum compiler (no hardware
-> backends, no routing, no noise models — see Limitations).
+> **Honest framing:** this is a teaching compiler for learning and portfolio
+> purposes. It has a real compiler architecture, simulation-verified rewrites,
+> an exact small-circuit proof engine, and an abstract-coupling-map router — but
+> it is not a production quantum compiler (no hardware backends, no device
+> calibration, no noise models — see Limitations).
 
 ## Why it is interesting
 
-Most toy compilers *claim* their optimizations are correct. Daedalus checks:
-every optimized circuit is re-simulated against the original on a set of
-deterministic basis states and seeded pseudo-random inputs, and must match
-up to global phase. The test suite uses the same machinery to prove each
-pass is semantics-preserving.
+Most toy compilers *claim* their optimizations are correct. Daedalus checks two
+ways:
+
+- **Randomized** — every optimized circuit is re-simulated against the original
+  on a deterministic battery of basis states and seeded pseudo-random inputs,
+  and must agree up to global phase. This scales to 10 qubits.
+- **Exact** — for small circuits it builds the full `2ⁿ×2ⁿ` unitary and compares
+  the two circuits exactly, reporting the Frobenius difference norm and process
+  fidelity. This is a genuine proof, not evidence.
 
 ```
-$ daedalus compile examples/rotations.qf --opt --emit ascii --verify
-verify: equivalent up to global phase (max error 2.483e-16, 8 inputs)
+$ daedalus compile examples/rotations.qf --opt --proof --emit ascii
+proof: exact unitary check, equivalent up to global phase (diff norm 3.140e-16, process fidelity 1.0000000000, dimension 4)
 BEFORE:
 q0: -[RZ(pi/4)]--[RZ(pi/4)]---o---[RZ(-pi/2)]-----------------------
                               |
@@ -42,9 +50,10 @@ q1: -(+)--[M->c0]-
 gates: 7 -> 2
 ```
 
-Seven gates collapse to two: the adjacent `rz(pi/4)` pair merges to
-`rz(pi/2)`, which *commutes through the cx control* and cancels against
-`rz(-pi/2)`; the `rx` pair merges to `rx(0)` and evaporates.
+Seven gates collapse to two: the adjacent `rz(pi/4)` pair merges to `rz(pi/2)`,
+which *commutes through the cx control* and cancels against `rz(-pi/2)`; the `rx`
+pair merges to `rx(0)` and evaporates — and the exact unitary confirms the result
+is the same operator.
 
 ## The DSL
 
@@ -56,17 +65,15 @@ h q0
 x q1
 x q1
 cx q0, q1
+barrier q0, q1     # optional optimization fence (see below)
 measure q0 -> c0
 measure q1 -> c1
 ```
 
-DSL source files use the `.qf` extension — a short, stable extension for
-quantum-circuit source that existing programs and tooling keep using
-unchanged.
-
-Gates: `h x y z s sdg t tdg rx(a) ry(a) rz(a) cx cz swap measure`.
-Angles support pi arithmetic (`pi/4`, `-pi/2`, `2*pi`) via a tiny safe
-expression evaluator — no `eval`. Parse errors carry line and column:
+DSL source files use the `.qf` extension. Gates:
+`h x y z s sdg t tdg rx(a) ry(a) rz(a) cx cz swap measure`, plus `barrier` as a
+scheduling fence. Angles support pi arithmetic (`pi/4`, `-pi/2`, `2*pi`) via a
+tiny safe expression evaluator — no `eval`. Parse errors carry line and column:
 
 ```
 bad.qf:2:1: error: unknown gate 'foo'
@@ -76,103 +83,137 @@ bad.qf:2:1: error: unknown gate 'foo'
 
 | pass | what it does |
 |---|---|
-| `cancel-inverses` | removes adjacent self-inverse pairs (`h h`, `x x`, `cx cx`, `s sdg`, `t tdg`, ...) |
+| `cancel-inverses` | removes adjacent self-inverse pairs (`h h`, `x x`, `cx cx`, `s sdg`, `t tdg`, …) |
 | `merge-rotations` | fuses adjacent same-axis rotations, drops angles that are 0 mod 2pi |
-| `peephole` | Hadamard-conjugation identities: `h x h -> z`, `h z h -> x`, `h y h -> y`, and the basis-change rotations `h rz(a) h -> rx(a)`, `h rx(a) h -> rz(a)`, `h ry(a) h -> ry(-a)` |
-| `commute-cancel` | commutes z-diagonal gates through cx controls to expose cancellations |
+| `peephole` | Hadamard-conjugation identities: `h x h → z`, `h z h → x`, `h y h → y`, and the basis-change rotations `h rz(a) h → rx(a)`, `h rx(a) h → rz(a)`, `h ry(a) h → ry(-a)` |
+| `control-flip` | `h h cx h h → cx` reversed: a Hadamard sandwich flips a cx's direction (five gates to one) |
+| `commute-cancel` | commutes z-diagonal gates through cx **controls** / cz, *and* x-type gates (`x`, `rx`) through cx **targets**, to expose cancellations |
+| `canonicalize-rotations` | lowers special-angle rotations to named Clifford+T gates (`rz(pi/2)→s`, `rz(pi/4)→t`, `rx(pi)→x`, …); drops identity rotations |
 | `dead-code` | *(off by default, `--dce`)* drops gates on never-measured qubits; documented as observably unsafe if you inspect the full state |
 
-The pass manager runs passes to a fixpoint and reports per-pass statistics:
+The pass manager runs passes to a fixpoint and reports per-pass statistics plus
+depth:
 
 ```
-$ daedalus stats examples/bell.qf
+$ daedalus stats examples/clifford_t.qf
 pass               iter  before  after  removed
-cancel-inverses       1       6      4        2
-merge-rotations       1       4      4        0
+cancel-inverses       1       7      7        0
 ...
-total: 6 -> 4 gates (33.3% reduction)
+total: 7 -> 5 gates (28.6% reduction)
+depth: 6 -> 4
 ```
+
+Every pass is proven semantics-preserving by the test suite, which re-verifies
+each rewrite with the equivalence checker (and, for small circuits, the exact
+unitary). A **`barrier`** is an optimization fence: no pass may move a gate
+across it. Every pass is tested to fire without a fence and to be blocked by one.
+
+## Verified routing onto a coupling map
+
+Real hardware only allows two-qubit gates between *coupled* qubits. Daedalus can
+route a logical circuit onto a coupling map — `line`, `ring`, `grid`, `full`, or
+a custom edge list — by inserting SWAPs, and then **prove** the routed circuit
+reproduces the original *up to the qubit permutation the SWAPs induce*.
+
+```
+$ daedalus route examples/routed_line.qf --coupling line --verify
+routed onto a 4-qubit coupling map: 4 swap(s) added, depth 5 -> 8
+final layout (logical -> physical): [1, 2, 0, 3]
+verify: routed circuit equivalent up to the final layout (max error 0.000e+00, 10 inputs)
+```
+
+```
+q0: -[H]--x------x------(+)-
+          |      |       |
+q1: ------x--x---x---x---o--
+             |       |
+q2: ---------x---o---x---o--
+                 |       |
+q3: ------------(+)------o---[T]--[M->c0]-
+```
+
+The router is a deliberately simple greedy one (trivial initial layout, no
+lookahead) — but it is *verified*: `check_routing_equivalence` embeds each input
+under the initial layout, simulates the routed circuit, and compares the output
+read back through the final layout, exact for small circuits. That is the whole
+point: routing is only trustworthy because it is proven.
+
+## Resource analysis and the dependency DAG
+
+```
+$ daedalus analyze examples/qft3.qf
+qubits: 3    bits: 0
+operations: 19
+depth: 16
+1-qubit gates: 12
+2-qubit gates: 7
+T-count (t+tdg): 0
+gate histogram:
+  cx: 6
+  ...
+```
+
+`analyze` reports depth, gate mix, two-qubit count, and **T-count** (the
+dominant cost metric in fault-tolerant quantum computing); `--json` emits the
+same numbers as JSON. `--emit dot` writes the IR's per-wire dependency DAG as
+Graphviz (`daedalus compile FILE --emit dot | dot -Tsvg -o dag.svg`), making the
+"the IR is effectively a DAG" claim literal.
+
+SVG diagrams (committed under `examples/`, regenerable with
+`daedalus compile … --emit svg --out …`):
+
+| before | after `--opt` |
+|---|---|
+| ![bell before](examples/bell.before.svg) | ![bell after](examples/bell.after.svg) |
+| ![clifford before](examples/clifford_t.before.svg) | ![clifford after](examples/clifford_t.after.svg) |
+
+## OpenQASM 2.0 interop
+
+Any circuit can be exported to OpenQASM 2.0 with `--emit qasm`, and `.qasm` files
+compile directly. The importer accepts a documented *subset*: one `qreg` and at
+most one `creg` (any names), the qelib1 gates
+`h x y z s sdg t tdg rx ry rz cx cz swap`, `measure q[i] -> c[j]`,
+`barrier q[i], …`, pi-arithmetic angles, and `//` comments, with indexed
+operands only. User-defined `gate` blocks, `if`, `opaque`, `reset`, the `U`/`CX`
+builtins, whole-register broadcast, and multiple registers are rejected with the
+same precise `line:col` diagnostics as the DSL parser. The test suite round-trips
+every example (original and optimized) through QASM and re-proves equivalence.
+
+## The QFT, proven
+
+`examples/qft3.qf` is a 3-qubit Quantum Fourier Transform written entirely in the
+elementary gate set (each controlled-phase is decomposed into two `rz`s and two
+`cx`s). `test_examples.py` builds its unitary and proves it equals the analytic
+8-point DFT matrix up to global phase — a real algorithm, verified from first
+principles.
 
 ## Install & run
 
-Requires Python 3.10+ (developed on 3.13). Zero runtime dependencies;
-`pytest` is the only dev dependency.
+Requires Python 3.10+ (developed on 3.13). Zero runtime dependencies; `pytest`,
+`ruff`, and `mypy` are the only dev dependencies.
 
 ```bash
 python -m venv .venv
 .venv/Scripts/python.exe -m pip install -e ".[dev]"   # Windows
 # .venv/bin/python -m pip install -e ".[dev]"          # Linux/macOS
 
-.venv/Scripts/python.exe -m pytest -q                  # 251 tests
+.venv/Scripts/python.exe -m pytest -q                  # 395 tests
+.venv/Scripts/python.exe -m ruff check .               # lint
+.venv/Scripts/python.exe -m mypy src                   # strict types
 ```
 
 CLI (also runnable as `python -m daedalus`):
 
 ```
-daedalus compile FILE [--opt] [--emit ir|ascii|svg|qasm] [--verify] [--dce] [--out FILE]
-daedalus stats FILE
+daedalus compile FILE [--opt] [--emit ir|ascii|svg|qasm|dot] [--verify] [--proof] [--dce] [--out FILE]
+daedalus route   FILE --coupling line|ring|full[:N]|grid:RxC [--emit …] [--verify] [--out FILE]
+daedalus analyze FILE [--json]
+daedalus stats   FILE [--dce]
 ```
 
-Files ending in `.qasm` are parsed as OpenQASM 2.0 (see below); everything
-else is parsed as the DSL.
-
-Exit codes: `0` success (and verification passed), `1` compile/verify
-failure, `2` usage errors.
-
-SVG diagrams (committed under `examples/`, regenerable with
-`daedalus compile examples/bell.qf --opt --emit svg --out ...`):
-
-| before | after `--opt` |
-|---|---|
-| ![bell before](examples/bell.before.svg) | ![bell after](examples/bell.after.svg) |
-| ![rotations before](examples/rotations.before.svg) | ![rotations after](examples/rotations.after.svg) |
-
-## OpenQASM 2.0 interop
-
-Any circuit can be exported to OpenQASM 2.0 with `--emit qasm` (or
-`daedalus.emit_qasm`), and `.qasm` files compile directly. Real observed run:
-
-```
-$ daedalus compile examples/bell.qf --opt --verify --emit qasm
-verify: equivalent up to global phase (max error 0.000e+00, 8 inputs)
-OPENQASM 2.0;
-include "qelib1.inc";
-qreg q[2];
-creg c[2];
-h q[0];
-cx q[0],q[1];
-measure q[0] -> c[0];
-measure q[1] -> c[1];
-```
-
-Feeding that file back in (`daedalus compile bell.qasm --emit ir`) recovers the
-DSL circuit; the test suite round-trips every example program (and its
-optimized form) through QASM and re-proves equivalence with the statevector
-checker.
-
-**Honest subset caveats.** The importer accepts a documented *subset* of
-OpenQASM 2.0, not the full language:
-
-- one `qreg` and at most one `creg` (any names — they are re-emitted as
-  `q`/`c`), sizes >= 1;
-- the qelib1 gates `h x y z s sdg t tdg rx ry rz cx cz swap` plus
-  `measure q[i] -> c[j]`, with indexed operands only (no whole-register
-  broadcast like `h q;`);
-- angle expressions over numbers (exponent notation included), `pi`,
-  `+ - * /`, and parentheses;
-- `//` comments; free-form whitespace.
-
-User-defined `gate` blocks, `if`, `barrier`, `opaque`, `reset`, and the
-bare `U`/`CX` builtins are rejected with the same precise `line:col`
-diagnostics as the DSL parser, e.g.
-
-```
-bad.qasm:3:1: error: 'barrier' is not supported
-```
-
-The emitter writes angles as plain floats (`rz(0.7853981633974483)`), so a
-DSL -> QASM -> DSL round trip loses the `pi/4` *spelling* but preserves the
-value bit-exactly.
+Files ending in `.qasm` are parsed as OpenQASM 2.0; everything else as the DSL.
+Exit codes: `0` success, `1` I/O error, `2` usage/syntax error, `3` verification
+failed.
 
 ## Architecture
 
@@ -181,51 +222,53 @@ src/daedalus/
   lexer.py       tokenizer with line/column tracking
   parser.py      recursive-descent parser -> Circuit IR
   angles.py      safe pi-arithmetic expression evaluator (no eval)
-  ir.py          Circuit/Gate IR; per-qubit dependency chains (a DAG
-                 linearized in program order)
+  ir.py          Circuit/Gate IR; per-qubit dependency chains (a DAG in program order)
   passes/        one module per optimization pass + the fixpoint manager
   sim.py         pure-stdlib statevector simulator (complex lists, <=10 qubits)
-  verify.py      up-to-global-phase equivalence checker (basis + seeded
-                 pseudo-random inputs)
+  unitary.py     exact 2**n unitary construction + up-to-global-phase comparison
+  verify.py      randomized + exact equivalence checking, incl. routing (permutation-aware)
+  topology.py    coupling maps (line/ring/grid/full/custom) with BFS distance
+  route.py       verified SWAP-insertion router
+  analyze.py     depth / gate mix / two-qubit / T-count metrics
   draw_ascii.py  aligned-column ASCII circuit diagrams
   draw_svg.py    hand-rolled SVG writer (no deps)
+  dot.py         Graphviz DOT export of the dependency DAG
   qasm.py        OpenQASM 2.0 emitter + documented-subset importer
-  cli.py         argparse CLI
-tests/           251 pytest tests: parser errors by position, every pass,
-                 hand-computed amplitudes (Bell/GHZ), equivalence checker
-                 positive AND negative cases, SVG well-formedness, QASM
-                 exact-output/roundtrip/error-position checks, CLI e2e
+  cli.py         argparse CLI (compile / route / analyze / stats)
+tests/           395 pytest tests: parser errors by position, every pass, hand-
+                 computed amplitudes (Bell/GHZ), exact-vs-randomized agreement,
+                 verified routing across five topologies, the QFT-equals-DFT
+                 proof, SVG/DOT well-formedness, QASM roundtrips, CLI e2e
 ```
-
-Why the IR is "effectively a DAG": gates are stored in program order, but
-each gate only constrains gates that share a qubit; per-qubit chains are the
-DAG edges, and passes exploit commutation within them.
 
 ## Safety & privacy
 
 Runs fully offline; no network, no telemetry. The angle evaluator is a
-whitelisted mini-parser, not `eval`. All examples are synthetic.
+whitelisted mini-parser, not `eval`. The SVG tree is generated, never parsed. All
+examples are synthetic.
 
 ## Limitations
 
-- Statevector simulation is exponential; the simulator refuses >10 qubits.
-- Measurement is modelled as a marker, not a collapse: the simulator
-  compares *pre-measurement* statevectors and passes never move or alter
-  `measure` gates. There is no classical control flow.
-- Verification samples inputs, not exhaustive states: computational basis
-  states (all of them for <=3 qubits, a fixed subset above that) plus four
-  seeded pseudo-random states per check. That is overwhelming evidence, not a
-  formal proof — the 2-qubit examples above happen to use 8 inputs (4 basis +
-  4 random).
-- No hardware backends, transpilation targets, routing, or noise models.
-- The commutation pass only handles z-diagonal gates through cx controls —
-  intentionally the simplest genuinely useful case.
+- Statevector simulation is exponential; the simulator refuses >10 qubits, and
+  the exact unitary proof caps at 7 qubits (`2¹⁴` matrix entries).
+- Measurement is modelled as a marker, not a collapse: the simulator compares
+  *pre-measurement* statevectors and passes never move or alter `measure` gates.
+  There is no classical control flow.
+- Randomized verification samples inputs (all basis states for ≤3 qubits plus a
+  fixed subset above that, plus four seeded random states); that is overwhelming
+  evidence, not a proof. The exact unitary mode *is* a proof, but only for small
+  circuits.
+- Routing uses the trivial initial layout and a greedy, no-lookahead SWAP chooser
+  on **abstract** coupling maps — no device calibration, gate timings, or noise.
+  It minimizes nothing; it only guarantees adjacency and correctness.
+- The commutation pass handles z-diagonal gates through cx controls/cz and
+  x-type gates through cx targets — the simplest genuinely useful cases.
 
 ## Roadmap
 
-- Controlled-phase fusion and a T-count report.
-- A `--proof` mode emitting the unitary difference norm for small circuits.
-- Gate-count-vs-depth pareto stats.
+- Smarter initial layout and lookahead (SABRE-style) routing.
+- Directed coupling maps that prefer a cx direction (feeding `control-flip`).
+- Controlled-phase fusion and a gate-count-vs-depth pareto explorer.
 
 ## License
 
