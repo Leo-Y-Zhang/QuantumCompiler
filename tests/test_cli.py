@@ -167,6 +167,35 @@ class TestStats:
         out = capsys.readouterr().out
         assert "6 -> 4" in out
 
+    def test_stats_shows_depth(self, program: Path, capsys) -> None:
+        cli.main(["stats", str(program)])
+        assert "depth:" in capsys.readouterr().out
+
+
+class TestAnalyze:
+    def test_report(self, program: Path, capsys) -> None:
+        assert cli.main(["analyze", str(program)]) == 0
+        out = capsys.readouterr().out
+        assert "qubits: 2" in out
+        assert "depth:" in out
+        assert "T-count" in out
+
+    def test_json(self, program: Path, capsys) -> None:
+        import json as _json
+
+        assert cli.main(["analyze", str(program), "--json"]) == 0
+        data = _json.loads(capsys.readouterr().out)
+        assert data["num_qubits"] == 2
+        assert data["two_qubit_count"] == 1
+
+
+class TestDotEmit:
+    def test_compile_emit_dot(self, program: Path, capsys) -> None:
+        assert cli.main(["compile", str(program), "--emit", "dot"]) == 0
+        out = capsys.readouterr().out
+        assert out.startswith("digraph")
+        assert "->" in out
+
 
 BELL_QASM = """\
 OPENQASM 2.0;

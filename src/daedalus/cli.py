@@ -11,11 +11,14 @@ Exit codes
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from collections.abc import Sequence
 from pathlib import Path
 
 from daedalus import __version__
+from daedalus.analyze import analyze, format_report, metrics_to_dict
+from daedalus.dot import to_dot
 from daedalus.draw_ascii import column_layout, render_ascii
 from daedalus.draw_svg import render_svg
 from daedalus.errors import DaedalusError
@@ -53,9 +56,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     compile_parser.add_argument(
         "--emit",
-        choices=("ir", "ascii", "svg", "qasm"),
+        choices=("ir", "ascii", "svg", "qasm", "dot"),
         default="ascii",
-        help="output format (default: ascii)",
+        help="output format (default: ascii; dot = Graphviz dependency DAG)",
     )
     compile_parser.add_argument(
         "--verify",
@@ -99,7 +102,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     route_parser.add_argument(
         "--emit",
-        choices=("ir", "ascii", "svg", "qasm"),
+        choices=("ir", "ascii", "svg", "qasm", "dot"),
         default="ascii",
         help="output format for the routed circuit (default: ascii)",
     )
@@ -109,6 +112,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="prove the routed circuit equals the original up to the final layout",
     )
     route_parser.add_argument("--out", help="write the routed circuit to FILE")
+
+    analyze_parser = subcommands.add_parser(
+        "analyze", help="report circuit resources: depth, gate mix, T-count"
+    )
+    analyze_parser.add_argument(
+        "file", help="source file (.qasm is parsed as OpenQASM 2.0, else DSL)"
+    )
+    analyze_parser.add_argument(
+        "--json", action="store_true", help="emit metrics as JSON instead of a report"
+    )
     return parser
 
 
@@ -130,6 +143,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_stats(circuit, dce=args.dce)
     if args.command == "route":
         return _run_route(args, circuit)
+    if args.command == "analyze":
+        return _run_analyze(circuit, as_json=args.json)
     return _run_compile(args, circuit)
 
 
@@ -186,11 +201,14 @@ def _emit(args: argparse.Namespace, original: Circuit, optimized: Circuit) -> st
 
 def _run_stats(circuit: Circuit, dce: bool) -> int:
     optimized, stats = PassManager(default_passes(dce=dce)).run(circuit)
-    print(_format_stats(stats, len(circuit.gates), len(optimized.gates)), end="")
+    depths = (_depth(circuit), _depth(optimized))
+    print(_format_stats(stats, len(circuit.gates), len(optimized.gates), depths), end="")
     return 0
 
 
-def _format_stats(stats: list[PassStats], before: int, after: int) -> str:
+def _format_stats(
+    stats: list[PassStats], before: int, after: int, depths: tuple[int, int]
+) -> str:
     lines = [f"{'pass':<18} {'iter':>4} {'before':>7} {'after':>6} {'removed':>8}"]
     for entry in stats:
         removed = entry.gates_before - entry.gates_after
@@ -200,6 +218,7 @@ def _format_stats(stats: list[PassStats], before: int, after: int) -> str:
         )
     reduction = 100.0 * (before - after) / before if before else 0.0
     lines.append(f"total: {before} -> {after} gates ({reduction:.1f}% reduction)")
+    lines.append(f"depth: {depths[0]} -> {depths[1]}")
     return "\n".join(lines) + "\n"
 
 
@@ -280,7 +299,18 @@ def _emit_circuit(emit: str, circuit: Circuit) -> str:
         return render_svg(circuit)
     if emit == "qasm":
         return emit_qasm(circuit)
+    if emit == "dot":
+        return to_dot(circuit)
     return render_ascii(circuit) + "\n"
+
+
+def _run_analyze(circuit: Circuit, as_json: bool) -> int:
+    metrics = analyze(circuit)
+    if as_json:
+        print(json.dumps(metrics_to_dict(metrics), indent=2))
+    else:
+        print(format_report(metrics), end="")
+    return 0
 
 
 def _write_output(output: str, out_path: str | None) -> int:
