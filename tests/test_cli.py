@@ -72,6 +72,27 @@ class TestCompile:
         assert code == 0
         assert "dead-code" in capsys.readouterr().err
 
+    def test_proof_reports_exact_unitary(self, program: Path, capsys) -> None:
+        assert cli.main(["compile", str(program), "-O", "--proof"]) == 0
+        err = capsys.readouterr().err
+        assert "exact unitary" in err
+        assert "process fidelity" in err
+
+    def test_proof_failure_exits_3(self, program: Path, capsys, monkeypatch) -> None:
+        from daedalus.verify import ProofResult
+
+        failed = ProofResult(
+            equivalent=False, method="exact-unitary", max_error=1.0, inputs_checked=4
+        )
+        monkeypatch.setattr(cli, "prove_equivalence", lambda *a, **k: failed)
+        assert cli.main(["compile", str(program), "-O", "--proof"]) == 3
+        assert "refusing to emit" in capsys.readouterr().err
+
+    def test_dce_proof_warns(self, program: Path, capsys) -> None:
+        code = cli.main(["compile", str(program), "-O", "--dce", "--proof"])
+        assert code == 0
+        assert "dead-code" in capsys.readouterr().err
+
 
 class TestErrors:
     def test_syntax_error_exit_2_with_position(self, tmp_path: Path, capsys) -> None:
