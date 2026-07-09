@@ -6,8 +6,8 @@ Program: repo max-upgrades #3 (after Hephaestus, Helios). Spec:
 
 ## Build order (spec steps) — status
 - [x] Step 0 — Tooling gate: ruff + mypy + CI lint job
-- [ ] Step 1 — Exact unitary proof engine (`unitary.py`, `--proof`)
-- [ ] Step 2 — New verified passes (canonicalize-rotations, commute x-basis, control-flip)
+- [x] Step 1 — Exact unitary proof engine (`unitary.py`, `--proof`)
+- [x] Step 2 — New verified passes (canonicalize-rotations, commute x-basis, control-flip)
 - [ ] Step 3 — Topology + verified routing (crown jewel)
 - [ ] Step 4 — Resource analysis + DAG export
 - [ ] Step 5 — `barrier` optimization fence
@@ -15,8 +15,12 @@ Program: repo max-upgrades #3 (after Hephaestus, Helios). Spec:
 - [ ] Step 7 — Adversarial 3-lens review (Workflow) + fix confirmed
 - [ ] Step 8 — merge --no-ff to main, tag v1.0.0, push, CI green
 
+Tests: 251 baseline -> 312 now. Default pipeline order: cancel-inverses,
+merge-rotations, peephole, control-flip, commute-cancel, canonicalize-rotations.
+
 ## Exact next step
-Begin Step 1: exact unitary proof engine, TDD (tests first).
+Begin Step 3: topology.py (CouplingMap) + route.py (SWAP-insertion router) +
+verify.check_routing_equivalence (permutation-aware). TDD (tests first).
 
 ## Verify commands
 ```
