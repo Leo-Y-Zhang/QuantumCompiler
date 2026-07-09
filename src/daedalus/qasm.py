@@ -18,15 +18,15 @@ hand-written files of the same shape:
 - exactly one ``qreg`` and at most one ``creg`` (any names; sizes >= 1)
 - gate ops from the qelib1 subset ``h x y z s sdg t tdg rx ry rz cx cz swap``
   with *indexed* operands only (``q[0]``, never a whole register)
-- ``measure q[i] -> c[j];``
+- ``measure q[i] -> c[j];`` and ``barrier q[i], q[j], ...;``
 - angle expressions over numbers (including exponent notation), ``pi``,
   ``+ - * /``, unary minus, and parentheses
 - ``//`` comments; statements are free-form (newlines are insignificant)
 
-Everything else — user-defined ``gate`` blocks, ``if``, ``barrier``,
-``opaque``, ``reset``, the ``U``/``CX`` builtins, whole-register broadcast,
-multiple qregs/cregs — is rejected with a precise 1-based line:column error,
-in the same format as the DSL parser's diagnostics.
+Everything else — user-defined ``gate`` blocks, ``if``, ``opaque``, ``reset``,
+the ``U``/``CX`` builtins, whole-register broadcast, multiple qregs/cregs — is
+rejected with a precise 1-based line:column error, in the same format as the
+DSL parser's diagnostics.
 """
 
 from __future__ import annotations
@@ -43,7 +43,6 @@ _UNSUPPORTED = {
     "gate": "user-defined gates are not supported",
     "opaque": "'opaque' declarations are not supported",
     "if": "'if' statements are not supported",
-    "barrier": "'barrier' is not supported",
     "reset": "'reset' is not supported",
 }
 
@@ -65,6 +64,8 @@ def emit_qasm(circuit: Circuit) -> str:
     for gate in circuit.gates:
         if gate.name == "measure":
             lines.append(f"measure q[{gate.qubits[0]}] -> c[{gate.bit}];")
+        elif gate.name == "barrier":
+            lines.append("barrier " + ",".join(f"q[{q}]" for q in gate.qubits) + ";")
         elif gate.angle is not None:
             lines.append(f"{gate.name}({gate.angle!r}) q[{gate.qubits[0]}];")
         else:
@@ -263,6 +264,8 @@ class _QasmParser:
                 )
             elif token.text == "measure":
                 self.parse_measure()
+            elif token.text == "barrier":
+                self.parse_barrier()
             elif token.text in GATE_ARITY:
                 self.parse_gate()
             else:
@@ -403,6 +406,21 @@ class _QasmParser:
         bit = self.parse_operand(quantum=False)
         self.end_statement()
         self.gates.append(Gate("measure", (qubit,), bit=bit))
+
+    def parse_barrier(self) -> None:
+        self.advance()  # 'barrier'
+        qubits = [self.parse_operand(quantum=True)]
+        while self.peek().kind == "COMMA":
+            self.advance()
+            operand = self.peek()
+            qubit = self.parse_operand(quantum=True)
+            if qubit in qubits:
+                raise ParseError(
+                    f"duplicate qubit operand 'q[{qubit}]'", operand.line, operand.column
+                )
+            qubits.append(qubit)
+        self.end_statement()
+        self.gates.append(Gate("barrier", tuple(qubits)))
 
     def parse_operand(self, quantum: bool) -> int:
         kind_word = "qubit" if quantum else "bit"

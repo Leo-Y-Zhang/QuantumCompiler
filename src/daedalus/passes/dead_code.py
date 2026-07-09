@@ -32,6 +32,8 @@ class DeadCodeElimination:
             return a
 
         for gate in circuit.gates:
+            if gate.name == "barrier":
+                continue  # a fence is not a data interaction; do not connect wires
             root = find(gate.qubits[0])
             for q in gate.qubits[1:]:
                 parent[find(q)] = root

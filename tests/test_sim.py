@@ -15,7 +15,7 @@ INV_SQRT2 = 1 / math.sqrt(2)
 
 def assert_state(actual: list[complex], expected: list[complex]) -> None:
     assert len(actual) == len(expected)
-    for a, e in zip(actual, expected):
+    for a, e in zip(actual, expected, strict=True):
         assert a == pytest.approx(e, abs=1e-12)
 
 

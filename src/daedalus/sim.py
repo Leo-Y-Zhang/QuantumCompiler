@@ -5,9 +5,10 @@ Conventions
 Qubit ``k`` is bit ``k`` of the basis-state index, so qubit 0 is the least
 significant bit: basis index 3 of a 2-qubit register means ``q1=1, q0=1``.
 
-``measure`` operations are skipped: the simulator computes the
-pre-measurement state, which is exactly what the equivalence checker
-compares (optimization passes never move or alter measure gates).
+``measure`` and ``barrier`` operations are skipped: the simulator computes the
+pre-measurement state, which is exactly what the equivalence checker compares
+(optimization passes never move or alter measure gates), and a ``barrier`` is a
+scheduling fence with no action on the state.
 """
 
 from __future__ import annotations
@@ -51,7 +52,7 @@ def simulate(circuit: Circuit, initial: list[complex] | None = None) -> list[com
     if len(state) != dimension:
         raise ValueError(f"initial state must have {dimension} amplitudes, got {len(state)}")
     for gate in circuit.gates:
-        if gate.name == "measure":
+        if gate.name in ("measure", "barrier"):
             continue
         if gate.name == "cx":
             _apply_cx(state, gate.qubits[0], gate.qubits[1])

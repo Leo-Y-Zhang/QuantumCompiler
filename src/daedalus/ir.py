@@ -16,8 +16,8 @@ convenient topological order. ``measure`` operations participate as ordinary
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Iterable
 
 from daedalus.angles import format_angle
 
@@ -58,7 +58,7 @@ class Circuit:
                 wires[q].append(index)
         return wires
 
-    def replace_gates(self, gates: Iterable[Gate]) -> "Circuit":
+    def replace_gates(self, gates: Iterable[Gate]) -> Circuit:
         """Return a new circuit with the same registers but different gates."""
         return Circuit(self.num_qubits, self.num_bits, list(gates))
 
@@ -71,6 +71,8 @@ def dump(circuit: Circuit) -> str:
     for gate in circuit.gates:
         if gate.name == "measure":
             lines.append(f"measure q{gate.qubits[0]} -> c{gate.bit}")
+        elif gate.name == "barrier":
+            lines.append("barrier " + ", ".join(f"q{q}" for q in gate.qubits))
         elif gate.angle is not None:
             lines.append(f"{gate.name}({format_angle(gate.angle)}) q{gate.qubits[0]}")
         else:

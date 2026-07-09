@@ -26,7 +26,7 @@ class TestTokenize:
 
     def test_second_line_position(self) -> None:
         tokens = tokenize("qubits 2\nh q1\n")
-        h = [t for t in tokens if t.text == "h"][0]
+        h = next(t for t in tokens if t.text == "h")
         assert (h.line, h.column) == (2, 1)
 
     def test_arrow(self) -> None:
@@ -41,7 +41,7 @@ class TestTokenize:
 
     def test_number_float(self) -> None:
         tokens = tokenize("rx(0.5) q0\n")
-        num = [t for t in tokens if t.kind == "NUMBER"][0]
+        num = next(t for t in tokens if t.kind == "NUMBER")
         assert num.value == 0.5
 
     def test_arithmetic_operators(self) -> None:
@@ -58,7 +58,7 @@ class TestTokenize:
 
     def test_crlf_line_endings(self) -> None:
         tokens = tokenize("qubits 1\r\nh q0\r\n")
-        h = [t for t in tokens if t.text == "h"][0]
+        h = next(t for t in tokens if t.text == "h")
         assert (h.line, h.column) == (2, 1)
 
     def test_missing_final_newline(self) -> None:
