@@ -1,0 +1,11 @@
+# Clifford+T canonicalization demo. The optimizer lowers special-angle
+# rotations to named gates (rz(pi/4)->t, rz(pi/2)->s, rx(pi)->x), which then
+# exposes a t/tdg cancellation the rotation form would have hidden.
+qubits 2
+h q0
+rz(pi/4) q0
+rz(pi/2) q1
+rx(pi) q0
+cx q0, q1
+t q1
+tdg q1
