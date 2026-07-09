@@ -16,14 +16,16 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from daedalus import __version__
-from daedalus.draw_ascii import render_ascii
+from daedalus.draw_ascii import column_layout, render_ascii
 from daedalus.draw_svg import render_svg
 from daedalus.errors import DaedalusError
 from daedalus.ir import Circuit, dump
 from daedalus.parser import parse
 from daedalus.passes import DeadCodeElimination, PassManager, PassStats, default_passes
 from daedalus.qasm import emit_qasm, parse_qasm
-from daedalus.verify import check_equivalence, prove_equivalence
+from daedalus.route import RoutingResult, route
+from daedalus.topology import CouplingMap
+from daedalus.verify import check_equivalence, check_routing_equivalence, prove_equivalence
 
 _DCE_WARNING = (
     "warning: dead-code elimination changes unobserved state; "
@@ -82,6 +84,31 @@ def build_arg_parser() -> argparse.ArgumentParser:
     stats_parser.add_argument(
         "--dce", action="store_true", help="include dead-code elimination in the pipeline"
     )
+
+    route_parser = subcommands.add_parser(
+        "route", help="insert SWAPs so every 2-qubit gate obeys a coupling map"
+    )
+    route_parser.add_argument(
+        "file", help="source file (.qasm is parsed as OpenQASM 2.0, else DSL)"
+    )
+    route_parser.add_argument(
+        "--coupling",
+        default="line",
+        help="target topology: line[:N] | ring[:N] | full[:N] | grid:RxC "
+        "(N defaults to the circuit's qubit count)",
+    )
+    route_parser.add_argument(
+        "--emit",
+        choices=("ir", "ascii", "svg", "qasm"),
+        default="ascii",
+        help="output format for the routed circuit (default: ascii)",
+    )
+    route_parser.add_argument(
+        "--verify",
+        action="store_true",
+        help="prove the routed circuit equals the original up to the final layout",
+    )
+    route_parser.add_argument("--out", help="write the routed circuit to FILE")
     return parser
 
 
@@ -101,6 +128,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
     if args.command == "stats":
         return _run_stats(circuit, dce=args.dce)
+    if args.command == "route":
+        return _run_route(args, circuit)
     return _run_compile(args, circuit)
 
 
@@ -140,25 +169,11 @@ def _run_compile(args: argparse.Namespace, original: Circuit) -> int:
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
-    if args.out:
-        try:
-            Path(args.out).write_text(output, encoding="utf-8")
-        except OSError as exc:
-            print(f"error: cannot write '{args.out}': {exc.strerror or exc}", file=sys.stderr)
-            return 1
-    else:
-        print(output, end="")
-    return 0
+    return _write_output(output, args.out)
 
 
 def _emit(args: argparse.Namespace, original: Circuit, optimized: Circuit) -> str:
-    if args.emit == "ir":
-        return dump(optimized)
-    if args.emit == "svg":
-        return render_svg(optimized)
-    if args.emit == "qasm":
-        return emit_qasm(optimized)
-    if args.opt:
+    if args.emit == "ascii" and args.opt:
         return (
             "BEFORE:\n"
             + render_ascii(original)
@@ -166,7 +181,7 @@ def _emit(args: argparse.Namespace, original: Circuit, optimized: Circuit) -> st
             + render_ascii(optimized)
             + f"\n\ngates: {len(original.gates)} -> {len(optimized.gates)}\n"
         )
-    return render_ascii(optimized) + "\n"
+    return _emit_circuit(args.emit, optimized)
 
 
 def _run_stats(circuit: Circuit, dce: bool) -> int:
@@ -186,3 +201,96 @@ def _format_stats(stats: list[PassStats], before: int, after: int) -> str:
     reduction = 100.0 * (before - after) / before if before else 0.0
     lines.append(f"total: {before} -> {after} gates ({reduction:.1f}% reduction)")
     return "\n".join(lines) + "\n"
+
+
+def _run_route(args: argparse.Namespace, original: Circuit) -> int:
+    try:
+        coupling = _parse_coupling(args.coupling, original.num_qubits)
+        result = route(original, coupling)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    _report_routing(original, result, coupling)
+    if args.verify:
+        check = check_routing_equivalence(original, result.circuit, result.final_layout)
+        if not check.equivalent:
+            print(
+                f"verify: routing changed semantics (max error {check.max_error:.3e}); "
+                "refusing to emit",
+                file=sys.stderr,
+            )
+            return 3
+        print(
+            f"verify: routed circuit equivalent up to the final layout "
+            f"(max error {check.max_error:.3e}, {check.inputs_checked} inputs)",
+            file=sys.stderr,
+        )
+    try:
+        output = _emit_circuit(args.emit, result.circuit)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    return _write_output(output, args.out)
+
+
+def _report_routing(original: Circuit, result: RoutingResult, coupling: CouplingMap) -> None:
+    print(
+        f"routed onto a {coupling.num_qubits}-qubit coupling map: "
+        f"{result.swaps_added} swap(s) added, "
+        f"depth {_depth(original)} -> {_depth(result.circuit)}",
+        file=sys.stderr,
+    )
+    print(f"final layout (logical -> physical): {result.final_layout}", file=sys.stderr)
+
+
+def _depth(circuit: Circuit) -> int:
+    """Circuit depth = number of moments in the greedy schedule."""
+    return max(column_layout(circuit), default=-1) + 1
+
+
+def _parse_coupling(spec: str, num_qubits: int) -> CouplingMap:
+    """Build a coupling map from a ``kind[:arg]`` spec string."""
+    kind, _, arg = spec.partition(":")
+    kind = kind.lower()
+    if kind == "grid":
+        parts = arg.lower().split("x")
+        if len(parts) != 2 or not all(p.isdigit() for p in parts):
+            raise ValueError(f"invalid grid dimensions '{arg}', expected RxC like 2x3")
+        coupling = CouplingMap.grid(int(parts[0]), int(parts[1]))
+    elif kind in ("line", "ring", "full"):
+        if arg and not arg.isdigit():
+            raise ValueError(f"invalid size '{arg}' for {kind} coupling")
+        size = int(arg) if arg else num_qubits
+        builder = {"line": CouplingMap.line, "ring": CouplingMap.ring, "full": CouplingMap.full}
+        coupling = builder[kind](size)
+    else:
+        raise ValueError(f"unknown coupling '{spec}'; use line, ring, full, or grid:RxC")
+    if coupling.num_qubits < num_qubits:
+        raise ValueError(
+            f"coupling map has {coupling.num_qubits} qubits but the circuit needs {num_qubits}"
+        )
+    return coupling
+
+
+def _emit_circuit(emit: str, circuit: Circuit) -> str:
+    """Serialize a single circuit in the requested format."""
+    if emit == "ir":
+        return dump(circuit)
+    if emit == "svg":
+        return render_svg(circuit)
+    if emit == "qasm":
+        return emit_qasm(circuit)
+    return render_ascii(circuit) + "\n"
+
+
+def _write_output(output: str, out_path: str | None) -> int:
+    """Write *output* to *out_path* or stdout; return the process exit code."""
+    if out_path:
+        try:
+            Path(out_path).write_text(output, encoding="utf-8")
+        except OSError as exc:
+            print(f"error: cannot write '{out_path}': {exc.strerror or exc}", file=sys.stderr)
+            return 1
+    else:
+        print(output, end="")
+    return 0
