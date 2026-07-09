@@ -154,6 +154,83 @@ def prove_equivalence(
     )
 
 
+def check_routing_equivalence(
+    original: Circuit,
+    routed: Circuit,
+    final_layout: list[int],
+    *,
+    num_random: int = 4,
+    seed: int = DEFAULT_SEED,
+    atol: float = DEFAULT_ATOL,
+) -> EquivalenceResult:
+    """Prove *routed* equals *original* up to the qubit permutation it induces.
+
+    The router uses the trivial initial layout (logical qubit ``l`` starts on
+    physical qubit ``l``) and reports ``final_layout`` with
+    ``final_layout[l]`` = the physical qubit that carries logical ``l`` at the
+    end. This checks, on the standard basis + seeded-random input battery, that
+    routing on physical wires reproduces the original logical computation once
+    the outputs are read back through ``final_layout`` (up to one global phase).
+    """
+    n = original.num_qubits
+    m = routed.num_qubits
+    if len(final_layout) != n or m < n or sorted(set(final_layout)) != sorted(final_layout):
+        return EquivalenceResult(
+            equivalent=False,
+            max_error=float("inf"),
+            inputs_checked=0,
+            detail="invalid final layout for the given circuits",
+        )
+    inputs = _test_inputs(n, num_random, seed)
+    phase: complex | None = None
+    max_error = 0.0
+    for state in inputs:
+        out_logical = simulate(original, initial=state)
+        out_routed = simulate(routed, initial=_embed(state, n, m))
+        expected = _permute_embed(out_logical, n, m, final_layout)
+        if phase is None:
+            k = max(range(len(expected)), key=lambda i: abs(expected[i]))
+            phase = out_routed[k] / expected[k] if abs(expected[k]) > 0 else 1.0
+        error = max(abs(b - phase * a) for a, b in zip(expected, out_routed, strict=True))
+        max_error = max(max_error, error)
+    equivalent = max_error <= atol
+    return EquivalenceResult(
+        equivalent=equivalent,
+        max_error=max_error,
+        inputs_checked=len(inputs),
+        detail="" if equivalent else "routed outputs differ beyond tolerance",
+    )
+
+
+def _embed(state: list[complex], n: int, m: int) -> list[complex]:
+    """Embed an ``n``-qubit state into ``m`` physical qubits (identity layout).
+
+    Logical qubit ``l`` starts on physical qubit ``l`` and the extra physical
+    qubits start in ``|0>``, so this is a zero-pad to length ``2**m``.
+    """
+    padded = [0j] * (1 << m)
+    padded[: len(state)] = state
+    return padded
+
+
+def _permute_embed(
+    state: list[complex], n: int, m: int, final_layout: list[int]
+) -> list[complex]:
+    """Relabel an ``n``-qubit state onto ``m`` physical wires via *final_layout*.
+
+    Amplitude for logical configuration ``y`` moves to the physical index whose
+    bit ``final_layout[l]`` equals bit ``l`` of ``y`` (unused physical qubits 0).
+    """
+    out = [0j] * (1 << m)
+    for y, amp in enumerate(state):
+        z = 0
+        for logical in range(n):
+            if (y >> logical) & 1:
+                z |= 1 << final_layout[logical]
+        out[z] = amp
+    return out
+
+
 def _test_inputs(num_qubits: int, num_random: int, seed: int) -> list[list[complex]]:
     """Deterministic input battery: basis states plus seeded random states."""
     if num_qubits > MAX_QUBITS:
