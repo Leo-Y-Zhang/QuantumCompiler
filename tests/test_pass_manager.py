@@ -26,6 +26,21 @@ class TestFixpoint:
         circuit, _ = optimize("qubits 2\nh q0\ncx q0, q1\n")
         assert [g.name for g in circuit.gates] == ["h", "cx"]
 
+    def test_canonicalize_enables_new_cancellation(self) -> None:
+        # t and rz(-pi/4) are not both rotations, so merge cannot touch them;
+        # canonicalize lowers rz(-pi/4) to tdg, then cancel-inverses removes the
+        # resulting t tdg pair. A win only the new pass unlocks.
+        src = "qubits 1\nt q0\nrz(-pi/4) q0\n"
+        circuit, _ = optimize(src)
+        assert circuit.gates == []
+        assert check_equivalence(parse(src), circuit).equivalent
+
+    def test_special_rotations_lowered_in_pipeline(self) -> None:
+        original = parse("qubits 1\nh q0\nrz(pi/2) q0\nrx(pi) q0\n")
+        circuit, _ = optimize("qubits 1\nh q0\nrz(pi/2) q0\nrx(pi) q0\n")
+        assert [g.name for g in circuit.gates] == ["h", "s", "x"]
+        assert check_equivalence(original, circuit).equivalent
+
     def test_stats_chain_is_consistent(self) -> None:
         _, stats = optimize("qubits 1\nh q0\nh q0\nx q0\nx q0\n")
         for s in stats:
