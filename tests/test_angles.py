@@ -5,7 +5,7 @@ import math
 import pytest
 
 from daedalus.angles import evaluate, format_angle
-from daedalus.errors import ParseError, DaedalusError
+from daedalus.errors import DaedalusError, ParseError
 
 
 class TestEvaluate:
