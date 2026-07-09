@@ -71,6 +71,8 @@ def dump(circuit: Circuit) -> str:
     for gate in circuit.gates:
         if gate.name == "measure":
             lines.append(f"measure q{gate.qubits[0]} -> c{gate.bit}")
+        elif gate.name == "barrier":
+            lines.append("barrier " + ", ".join(f"q{q}" for q in gate.qubits))
         elif gate.angle is not None:
             lines.append(f"{gate.name}({format_angle(gate.angle)}) q{gate.qubits[0]}")
         else:
