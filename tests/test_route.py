@@ -65,6 +65,15 @@ class TestBasicRouting:
         assert measure.qubits[0] == result.final_layout[0]
         assert measure.bit == 0
 
+    def test_multi_qubit_barrier_survives_routing(self) -> None:
+        # Regression: a barrier must keep all its wires (relabeled), not collapse
+        # to its first operand. verify is blind to this (barrier = identity).
+        original = parse("qubits 3\nh q0\nbarrier q0, q1, q2\ncx q0, q2\n")
+        result = route(original, CouplingMap.line(3))
+        barrier = next(g for g in result.circuit.gates if g.name == "barrier")
+        assert len(barrier.qubits) == 3
+        assert sorted(barrier.qubits) == [0, 1, 2]  # a permutation of all wires
+
 
 def _permute_unitary_rows(matrix, n, layout):
     """Apply the final-layout qubit permutation to every column of *matrix*."""
