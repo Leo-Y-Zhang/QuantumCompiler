@@ -12,8 +12,8 @@ from __future__ import annotations
 
 import argparse
 import sys
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Sequence
 
 from daedalus import __version__
 from daedalus.draw_ascii import render_ascii

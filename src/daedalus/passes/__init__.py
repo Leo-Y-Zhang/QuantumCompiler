@@ -8,8 +8,9 @@ fixpoint loop terminates after at most ``len(gates) + 1`` iterations;
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Protocol, Sequence
+from typing import Protocol
 
 from daedalus.ir import Circuit
 from daedalus.passes.cancel_inverses import CancelInverses
@@ -19,15 +20,15 @@ from daedalus.passes.merge_rotations import MergeRotations
 from daedalus.passes.peephole import Peephole
 
 __all__ = [
-    "Pass",
-    "PassManager",
-    "PassStats",
-    "default_passes",
     "CancelInverses",
     "CommuteCancel",
     "DeadCodeElimination",
     "MergeRotations",
+    "Pass",
+    "PassManager",
+    "PassStats",
     "Peephole",
+    "default_passes",
 ]
 
 
