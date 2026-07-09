@@ -52,7 +52,7 @@ def render_ascii(circuit: Circuit) -> str:
 
     content: list[list[str]] = [[""] * num_columns for _ in range(num_rows)]
     connector: set[tuple[int, int]] = set()
-    for gate, column in zip(circuit.gates, columns):
+    for gate, column in zip(circuit.gates, columns, strict=True):
         for q, text in gate_cells(gate).items():
             content[2 * q][column] = text
         if len(gate.qubits) > 1:

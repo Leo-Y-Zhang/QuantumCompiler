@@ -61,7 +61,7 @@ def check_equivalence(
             k = max(range(len(out_original)), key=lambda i: abs(out_original[i]))
             phase = out_optimized[k] / out_original[k]
         error = max(
-            abs(b - phase * a) for a, b in zip(out_original, out_optimized)
+            abs(b - phase * a) for a, b in zip(out_original, out_optimized, strict=True)
         )
         max_error = max(max_error, error)
     equivalent = max_error <= atol
