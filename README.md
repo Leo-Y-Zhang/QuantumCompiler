@@ -113,7 +113,8 @@ across it. Every pass is tested to fire without a fence and to be blocked by one
 Real hardware only allows two-qubit gates between *coupled* qubits. Daedalus can
 route a logical circuit onto a coupling map — `line`, `ring`, `grid`, `full`, or
 a custom edge list — by inserting SWAPs, and then **prove** the routed circuit
-reproduces the original *up to the qubit permutation the SWAPs induce*.
+reproduces the original *up to the qubit permutation the SWAPs induce*. Two
+strategies are shipped (`--strategy greedy|sabre`, greedy is the default):
 
 ```
 $ daedalus route examples/routed_line.qf --coupling line --verify
@@ -132,11 +133,89 @@ q2: ---------x---o---x---o--
 q3: ------------(+)------o---[T]--[M->c0]-
 ```
 
-The router is a deliberately simple greedy one (trivial initial layout, no
-lookahead) — but it is *verified*: `check_routing_equivalence` embeds each input
-under the initial layout, simulates the routed circuit, and compares the output
-read back through the final layout, exact for small circuits. That is the whole
-point: routing is only trustworthy because it is proven.
+The default router is a deliberately simple greedy one (trivial initial layout,
+no lookahead) — but it is *verified*: `check_routing_equivalence` embeds each
+input under the initial layout, simulates the routed circuit, and compares the
+output read back through the final layout, exact for small circuits. That is
+the whole point: routing is only trustworthy because it is proven.
+
+### The sabre strategy
+
+`--strategy sabre` is a **SABRE-lite** router after Li, Ding & Xie 2019
+(*Tackling the Qubit Mapping Problem for NISQ-Era Quantum Devices*).
+Implemented subset: the front layer of the dependency DAG, candidate SWAPs
+scored by the summed BFS distance of the front layer plus a weighted lookahead
+window of upcoming two-qubit gates, and reverse-traversal initial-layout
+selection (one forward and one backward routing pass choose where each logical
+qubit starts). *Not* implemented from the paper: the decay factor and multiple
+reverse-traversal rounds. It is fully deterministic — no randomness, ties break
+on the smallest candidate edge — and a greedy shortest-path fallback fires if
+the heuristic stalls, so routing always terminates.
+
+```
+$ daedalus route examples/routed_line.qf --coupling line --strategy sabre --verify
+routed onto a 4-qubit coupling map: 1 swap(s) added, depth 5 -> 6
+initial layout (logical -> physical): [2, 1, 0, 3]
+final layout (logical -> physical): [1, 2, 0, 3]
+verify: routed circuit equivalent up to the final layout (max error 0.000e+00, 10 inputs)
+```
+
+One swap instead of greedy's four on the same circuit: the reverse traversal
+places the busy qubits adjacently before the pass starts. Because sabre picks a
+non-trivial *initial* placement, the oracle takes it into account:
+`check_routing_equivalence(original, routed, final_layout, initial_layout=...)`
+places each test input through the initial layout and reads the output back
+through the final layout — every sabre-routed circuit in the test suite is
+proven equivalent this way across all five topologies.
+
+### Benchmark: sabre vs greedy on the examples
+
+Measured on the committed example circuits (regenerate with
+`python -m daedalus.bench`; the table below is that command's verbatim output).
+`swaps` = SWAP gates inserted; `depth` = routed depth minus the original
+circuit's depth, using the repo's span-blocking moment metric.
+
+| circuit | topology | swaps greedy | swaps sabre | depth greedy | depth sabre |
+|---|---|---:|---:|---:|---:|
+| bell | line:4 | 0 | 0 | +0 | +0 |
+| bell | ring:4 | 0 | 0 | +0 | +0 |
+| bell | grid:2x2 | 0 | 0 | +0 | +0 |
+| bell | grid:2x3 | 0 | 0 | +0 | +0 |
+| bell | full:4 | 0 | 0 | +0 | +0 |
+| ghz | line:4 | 0 | 0 | +0 | +0 |
+| ghz | ring:4 | 0 | 0 | +0 | +0 |
+| ghz | grid:2x2 | 1 | 0 | +1 | +0 |
+| ghz | grid:2x3 | 0 | 0 | +0 | +0 |
+| ghz | full:4 | 0 | 0 | +0 | +0 |
+| rotations | line:4 | 0 | 0 | +0 | +0 |
+| rotations | ring:4 | 0 | 0 | +0 | +0 |
+| rotations | grid:2x2 | 0 | 0 | +0 | +0 |
+| rotations | grid:2x3 | 0 | 0 | +0 | +0 |
+| rotations | full:4 | 0 | 0 | +0 | +0 |
+| qft3 | line:4 | 1 | 1 | -1 | +1 |
+| qft3 | ring:4 | 1 | 1 | -1 | +1 |
+| qft3 | grid:2x2 | 2 | 1 | +1 | +1 |
+| qft3 | grid:2x3 | 1 | 1 | -1 | +1 |
+| qft3 | full:4 | 0 | 0 | +0 | -1 |
+| clifford_t | line:4 | 0 | 0 | +0 | +0 |
+| clifford_t | ring:4 | 0 | 0 | +0 | +0 |
+| clifford_t | grid:2x2 | 0 | 0 | +0 | +0 |
+| clifford_t | grid:2x3 | 0 | 0 | +0 | +0 |
+| clifford_t | full:4 | 0 | 0 | +0 | +0 |
+| routed_line | line:4 | 4 | 1 | +3 | +1 |
+| routed_line | ring:4 | 1 | 1 | +1 | +1 |
+| routed_line | grid:2x2 | 2 | 0 | +2 | +0 |
+| routed_line | grid:2x3 | 1 | 1 | +1 | +1 |
+| routed_line | full:4 | 0 | 0 | +0 | +0 |
+
+**Honest read:** these are tiny circuits (2–4 qubits), so this says nothing
+about routing quality at scale. On them, sabre never inserts *more* swaps than
+greedy and wins outright where layout matters (`routed_line` on `line:4`: 4
+swaps → 1; `ghz` and `routed_line` on `grid:2x2`: down to 0). But it does not
+dominate: on `qft3` over `line:4`, `ring:4`, and `grid:2x3` both insert 1 swap
+and **greedy ends 2 moments shallower** than sabre (depth −1 vs +1) — the
+depth metric is span-blocking, so sabre's non-trivial placement can cost
+diagram moments even at equal swap count.
 
 ## Resource analysis and the dependency DAG
 
@@ -197,7 +276,7 @@ python -m venv .venv
 .venv/Scripts/python.exe -m pip install -e ".[dev]"   # Windows
 # .venv/bin/python -m pip install -e ".[dev]"          # Linux/macOS
 
-.venv/Scripts/python.exe -m pytest -q                  # 398 tests
+.venv/Scripts/python.exe -m pytest -q                  # 456 tests
 .venv/Scripts/python.exe -m ruff check .               # lint
 .venv/Scripts/python.exe -m mypy src                   # strict types
 ```
@@ -206,7 +285,7 @@ CLI (also runnable as `python -m daedalus`):
 
 ```
 daedalus compile FILE [--opt] [--emit ir|ascii|svg|qasm|dot] [--verify] [--proof] [--dce] [--out FILE]
-daedalus route   FILE --coupling line|ring|full[:N]|grid:RxC [--emit …] [--verify] [--out FILE]
+daedalus route   FILE --coupling line|ring|full[:N]|grid:RxC [--strategy greedy|sabre] [--emit …] [--verify] [--out FILE]
 daedalus analyze FILE [--json]
 daedalus stats   FILE [--dce]
 ```
@@ -228,17 +307,19 @@ src/daedalus/
   unitary.py     exact 2**n unitary construction + up-to-global-phase comparison
   verify.py      randomized + exact equivalence checking, incl. routing (permutation-aware)
   topology.py    coupling maps (line/ring/grid/full/custom) with BFS distance
-  route.py       verified SWAP-insertion router
+  route.py       verified SWAP-insertion router (greedy + SABRE-lite strategies)
+  bench.py       sabre-vs-greedy swaps/depth benchmark over the examples
   analyze.py     depth / gate mix / two-qubit / T-count metrics
   draw_ascii.py  aligned-column ASCII circuit diagrams
   draw_svg.py    hand-rolled SVG writer (no deps)
   dot.py         Graphviz DOT export of the dependency DAG
   qasm.py        OpenQASM 2.0 emitter + documented-subset importer
   cli.py         argparse CLI (compile / route / analyze / stats)
-tests/           398 pytest tests: parser errors by position, every pass, hand-
+tests/           456 pytest tests: parser errors by position, every pass, hand-
                  computed amplitudes (Bell/GHZ), exact-vs-randomized agreement,
-                 verified routing across five topologies, the QFT-equals-DFT
-                 proof, SVG/DOT well-formedness, QASM roundtrips, CLI e2e
+                 verified routing (both strategies) across five topologies, the
+                 QFT-equals-DFT proof, SVG/DOT well-formedness, QASM roundtrips,
+                 CLI e2e
 ```
 
 ## Safety & privacy
@@ -258,15 +339,17 @@ examples are synthetic.
   fixed subset above that, plus four seeded random states); that is overwhelming
   evidence, not a proof. The exact unitary mode *is* a proof, but only for small
   circuits.
-- Routing uses the trivial initial layout and a greedy, no-lookahead SWAP chooser
-  on **abstract** coupling maps — no device calibration, gate timings, or noise.
-  It minimizes nothing; it only guarantees adjacency and correctness.
+- Routing works on **abstract** coupling maps — no device calibration, gate
+  timings, or noise. The greedy strategy minimizes nothing (it only guarantees
+  adjacency and correctness); the sabre strategy minimizes a swap-count
+  heuristic on tiny circuits (see the benchmark) but is a lite variant: no
+  decay factor, a single reverse-traversal round, and no optimality claim.
 - The commutation pass handles z-diagonal gates through cx controls/cz and
   x-type gates through cx targets — the simplest genuinely useful cases.
 
 ## Roadmap
 
-- Smarter initial layout and lookahead (SABRE-style) routing.
+- Full SABRE: decay factors and multiple reverse-traversal rounds.
 - Directed coupling maps that prefer a cx direction (feeding `control-flip`).
 - Controlled-phase fusion and a gate-count-vs-depth pareto explorer.
 
