@@ -159,18 +159,22 @@ def check_routing_equivalence(
     routed: Circuit,
     final_layout: list[int],
     *,
+    initial_layout: list[int] | None = None,
     num_random: int = 4,
     seed: int = DEFAULT_SEED,
     atol: float = DEFAULT_ATOL,
 ) -> EquivalenceResult:
     """Prove *routed* equals *original* up to the qubit permutation it induces.
 
-    The router uses the trivial initial layout (logical qubit ``l`` starts on
-    physical qubit ``l``) and reports ``final_layout`` with
-    ``final_layout[l]`` = the physical qubit that carries logical ``l`` at the
-    end. This checks, on the standard basis + seeded-random input battery, that
-    routing on physical wires reproduces the original logical computation once
-    the outputs are read back through ``final_layout`` (up to one global phase).
+    The router reports ``final_layout`` with ``final_layout[l]`` = the physical
+    qubit that carries logical ``l`` at the end. ``initial_layout`` says where
+    each logical qubit *starts*; ``None`` means the trivial layout (logical
+    qubit ``l`` on physical qubit ``l``), which is what the greedy router uses —
+    the sabre router chooses its own placement and must pass it here. This
+    checks, on the standard basis + seeded-random input battery, that routing on
+    physical wires reproduces the original logical computation once the inputs
+    are placed through ``initial_layout`` and the outputs read back through
+    ``final_layout`` (up to one global phase).
     """
     n = original.num_qubits
     m = routed.num_qubits
@@ -181,12 +185,27 @@ def check_routing_equivalence(
             inputs_checked=0,
             detail="invalid final layout for the given circuits",
         )
+    if initial_layout is not None and (
+        len(initial_layout) != n
+        or sorted(set(initial_layout)) != sorted(initial_layout)
+        or not all(0 <= p < m for p in initial_layout)
+    ):
+        return EquivalenceResult(
+            equivalent=False,
+            max_error=float("inf"),
+            inputs_checked=0,
+            detail="invalid initial layout for the given circuits",
+        )
     inputs = _test_inputs(n, num_random, seed)
     phase: complex | None = None
     max_error = 0.0
     for state in inputs:
         out_logical = simulate(original, initial=state)
-        out_routed = simulate(routed, initial=_embed(state, n, m))
+        if initial_layout is None:
+            placed = _embed(state, n, m)
+        else:
+            placed = _permute_embed(state, n, m, initial_layout)
+        out_routed = simulate(routed, initial=placed)
         expected = _permute_embed(out_logical, n, m, final_layout)
         if phase is None:
             k = max(range(len(expected)), key=lambda i: abs(expected[i]))
