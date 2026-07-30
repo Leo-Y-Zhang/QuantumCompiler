@@ -141,6 +141,34 @@ class TestRoute:
         assert cli.main(["route", str(far), "--coupling", "line", "--verify"]) == 3
         assert "changed semantics" in capsys.readouterr().err
 
+    def test_route_strategy_sabre_verifies_and_reports_initial_layout(
+        self, far: Path, capsys
+    ) -> None:
+        code = cli.main(
+            ["route", str(far), "--coupling", "line", "--strategy", "sabre", "--verify"]
+        )
+        assert code == 0
+        err = capsys.readouterr().err
+        assert "initial layout (logical -> physical):" in err
+        assert "final layout (logical -> physical):" in err
+        assert "equivalent up to the final layout" in err
+
+    def test_route_default_strategy_output_has_no_initial_layout_line(
+        self, far: Path, capsys
+    ) -> None:
+        # Back-compat: the greedy path (still the default) is unchanged.
+        assert cli.main(["route", str(far), "--coupling", "line", "--verify"]) == 0
+        err = capsys.readouterr().err
+        assert "initial layout" not in err
+
+    def test_route_strategy_greedy_matches_default(self, far: Path, capsys) -> None:
+        assert cli.main(["route", str(far), "--coupling", "line"]) == 0
+        default_out = capsys.readouterr()
+        assert cli.main(["route", str(far), "--coupling", "line", "--strategy", "greedy"]) == 0
+        explicit_out = capsys.readouterr()
+        assert explicit_out.out == default_out.out
+        assert explicit_out.err == default_out.err
+
 
 class TestErrors:
     def test_syntax_error_exit_2_with_position(self, tmp_path: Path, capsys) -> None:
