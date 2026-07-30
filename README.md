@@ -14,7 +14,9 @@ Daedalus compiles a small quantum-circuit DSL through a real compiler pipeline
 optimizations did not change the circuit's meaning, and can then route it onto a
 hardware coupling map — proving *that* correct too. The spine of the whole
 project is one idea: **nothing is trusted that the equivalence oracle cannot
-certify.**
+certify.** Even the [routing benchmark](#benchmark-sabre-vs-greedy-on-the-examples)
+below is the verbatim output of `python -m daedalus.bench`, including the rows
+where the smarter router does not win.
 
 > **Honest framing:** this is a teaching compiler for learning and portfolio
 > purposes. It has a real compiler architecture, simulation-verified rewrites,
@@ -97,7 +99,8 @@ depth:
 ```
 $ daedalus stats examples/clifford_t.qf
 pass               iter  before  after  removed
-cancel-inverses       1       7      7        0
+cancel-inverses       1       7      5        2
+merge-rotations       1       5      5        0
 ...
 total: 7 -> 5 gates (28.6% reduction)
 depth: 6 -> 4
@@ -117,18 +120,15 @@ reproduces the original *up to the qubit permutation the SWAPs induce*. Two
 strategies are shipped (`--strategy greedy|sabre`, greedy is the default):
 
 ```
-$ daedalus route examples/routed_line.qf --coupling line --verify
+$ daedalus route examples/routed_line.qf --coupling line --verify --emit ascii
 routed onto a 4-qubit coupling map: 4 swap(s) added, depth 5 -> 8
 final layout (logical -> physical): [1, 2, 0, 3]
 verify: routed circuit equivalent up to the final layout (max error 0.000e+00, 10 inputs)
-```
-
-```
-q0: -[H]--x------x------(+)-
+q0: -[H]--x------x------(+)---------------
           |      |       |
-q1: ------x--x---x---x---o--
+q1: ------x--x---x---x---o----------------
              |       |
-q2: ---------x---o---x---o--
+q2: ---------x---o---x---o----------------
                  |       |
 q3: ------------(+)------o---[T]--[M->c0]-
 ```
@@ -137,7 +137,11 @@ The default router is a deliberately simple greedy one (trivial initial layout,
 no lookahead) — but it is *verified*: `check_routing_equivalence` embeds each
 input under the initial layout, simulates the routed circuit, and compares the
 output read back through the final layout, exact for small circuits. That is
-the whole point: routing is only trustworthy because it is proven.
+the whole point: routing is only trustworthy because it is proven. With
+`--verify` the router cannot silently ship a wrong circuit: a failed oracle
+check refuses to emit anything and exits with code 3, and the test suite proves
+both strategies on random circuits and on every example across all five
+topologies.
 
 ### The sabre strategy
 
