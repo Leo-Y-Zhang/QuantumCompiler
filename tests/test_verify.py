@@ -1,7 +1,7 @@
 """Equivalence-checker tests: equal circuits, unequal circuits, phase traps."""
 
 from daedalus.parser import parse
-from daedalus.verify import check_equivalence, prove_equivalence
+from daedalus.verify import check_equivalence, check_routing_equivalence, prove_equivalence
 
 
 class TestEquivalent:
@@ -108,3 +108,54 @@ class TestProveEquivalence:
         assert "exact" in exact.summary().lower()
         rand = prove_equivalence(parse("qubits 8\n"), parse("qubits 8\n"))
         assert "random" in rand.summary().lower()
+
+
+class TestRoutingInitialLayout:
+    """The routing oracle can start from a non-trivial initial placement.
+
+    A SABRE-style router chooses where each logical qubit *starts*, so the
+    oracle takes an optional ``initial_layout`` (default: the trivial layout,
+    preserving the original behaviour byte for byte).
+    """
+
+    def test_relabeled_cx_accepted_only_under_its_initial_layout(self) -> None:
+        # Logical cx q0,q1 placed with logical 0 on physical 1 and vice versa:
+        # the physical circuit is cx q1,q0 and no SWAPs are needed.
+        original = parse("qubits 2\ncx q0, q1\n")
+        routed = parse("qubits 2\ncx q1, q0\n")
+        layout = [1, 0]
+        good = check_routing_equivalence(original, routed, layout, initial_layout=layout)
+        assert good.equivalent
+        # Under the trivial initial layout the same physical circuit is a
+        # *different* operator (control and target swapped), so it must fail.
+        bad = check_routing_equivalence(original, routed, [0, 1])
+        assert not bad.equivalent
+
+    def test_trivial_initial_layout_matches_default(self) -> None:
+        original = parse("qubits 3\ncx q0, q2\nh q1\n")
+        routed = parse("qubits 3\nswap q0, q1\ncx q1, q2\nh q0\n")
+        layout = [1, 0, 2]
+        default = check_routing_equivalence(original, routed, layout)
+        explicit = check_routing_equivalence(original, routed, layout, initial_layout=[0, 1, 2])
+        assert default.equivalent and explicit.equivalent
+        assert default.max_error == explicit.max_error
+
+    def test_invalid_initial_layout_rejected(self) -> None:
+        original = parse("qubits 2\ncx q0, q1\n")
+        routed = parse("qubits 2\ncx q0, q1\n")
+        for layout in ([0], [0, 0], [0, 2]):
+            result = check_routing_equivalence(
+                original, routed, [0, 1], initial_layout=layout
+            )
+            assert not result.equivalent
+            assert "initial layout" in result.detail
+
+    def test_wrong_start_placement_detected(self) -> None:
+        # x on logical 0 lands on physical 1 under this placement; claiming the
+        # trivial start makes the routed circuit act on the wrong logical qubit.
+        original = parse("qubits 2\nx q0\n")
+        routed = parse("qubits 2\nx q1\n")
+        assert check_routing_equivalence(
+            original, routed, [1, 0], initial_layout=[1, 0]
+        ).equivalent
+        assert not check_routing_equivalence(original, routed, [0, 1]).equivalent
