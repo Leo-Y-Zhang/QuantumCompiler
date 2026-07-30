@@ -1,10 +1,26 @@
-# Session handoff — Daedalus "to the max" (v1.0.0)
+# Session handoff — Daedalus
 
-Program: repo max-upgrades #3 (after Hephaestus, Helios). Spec:
-`docs/superpowers/specs/to-the-max.md` (self-approved). Branch:
-`feature/to-the-max`. Baseline v0.2.0 = 251 tests green.
+## PROJECT STATUS: v1.0.0 COMPLETE — DO NOT RE-EXECUTE ANY STEP BELOW
 
-## Build order (spec steps) — status
+The "to the max" program (spec: `docs/superpowers/specs/to-the-max.md`) is
+**finished**. Step 8 (merge --no-ff to main, tag v1.0.0, push) was **executed
+on 2026-07-09** — the merge commit `b61482a` ("Merge Daedalus to-the-max:
+verified quantum compiler v1.0.0") is on `main` and pushed. Any older copy of
+this file listing Step 8 as "the exact next step" is EXPIRED. There is nothing
+left of that program to resume.
+
+## Current state (2026-07-30): v1.1.0 sabre routing round
+
+- Feature round complete on `main`: SABRE-lite routing strategy
+  (`route --strategy sabre`), `check_routing_equivalence` initial-layout
+  support, `bench.py` sabre-vs-greedy benchmark, README/CHANGELOG updated,
+  version bumped to 1.1.0.
+- Gates at the end of the round: 456 pytest green, `ruff check .` clean,
+  `mypy src` (strict) clean.
+- **Committed locally, NOT pushed** — pushing was out of scope for the round.
+  Next step for a resuming session: push `main` after the operator confirms.
+
+## Historical record — "to the max" build order (all done)
 - [x] Step 0 — Tooling gate: ruff + mypy + CI lint job
 - [x] Step 1 — Exact unitary proof engine (`unitary.py`, `--proof`)
 - [x] Step 2 — New verified passes (canonicalize-rotations, commute x-basis, control-flip)
@@ -13,16 +29,7 @@ Program: repo max-upgrades #3 (after Hephaestus, Helios). Spec:
 - [x] Step 5 — `barrier` optimization fence (parse/dump/sim/draw/qasm + all passes respect it)
 - [x] Step 6 — Showcase / examples / README overhaul + CHANGELOG + version 1.0.0
 - [x] Step 7 — Adversarial 3-lens review (Workflow): 3 findings, all confirmed + fixed
-- [ ] Step 8 — merge --no-ff to main, tag v1.0.0, push, CI green
-
-Tests: 251 baseline -> 398 now. Default pipeline order: cancel-inverses,
-merge-rotations, peephole, control-flip, commute-cancel, canonicalize-rotations.
-New modules: unitary.py, topology.py, route.py, analyze.py, dot.py.
-CLI subcommands: compile, stats, route, analyze. barrier is a fence gate.
-Review fixes: router now preserves multi-qubit barriers; +DCE/route barrier tests.
-
-## Exact next step
-Step 8: merge --no-ff to main, tag v1.0.0, push, confirm CI green.
+- [x] Step 8 — merge --no-ff to main, tag v1.0.0, push, CI green (DONE 2026-07-09)
 
 ## Verify commands
 ```
