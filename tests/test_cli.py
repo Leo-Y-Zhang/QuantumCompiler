@@ -283,6 +283,112 @@ class TestQasm:
         assert "error" in capsys.readouterr().err
 
 
+class TestEquiv:
+    @pytest.fixture()
+    def equal_pair(self, tmp_path: Path) -> tuple[Path, Path]:
+        a = tmp_path / "a.qf"
+        a.write_text("qubits 1\nh q0\nh q0\n", encoding="ascii")
+        b = tmp_path / "b.qf"
+        b.write_text("qubits 1\n", encoding="ascii")
+        return a, b
+
+    @pytest.fixture()
+    def unequal_pair(self, tmp_path: Path) -> tuple[Path, Path]:
+        a = tmp_path / "a.qf"
+        a.write_text("qubits 1\nx q0\n", encoding="ascii")
+        b = tmp_path / "b.qf"
+        b.write_text("qubits 1\nz q0\n", encoding="ascii")
+        return a, b
+
+    def test_equivalent_pair_exits_0(self, equal_pair: tuple[Path, Path], capsys) -> None:
+        a, b = equal_pair
+        assert cli.main(["equiv", str(a), str(b)]) == 0
+        out = capsys.readouterr().out
+        assert "equivalent up to global phase" in out
+        assert "exact unitary" in out
+
+    def test_unequal_pair_exits_3_with_witness_and_shrink(
+        self, unequal_pair: tuple[Path, Path], capsys
+    ) -> None:
+        a, b = unequal_pair
+        assert cli.main(["equiv", str(a), str(b)]) == 3
+        out = capsys.readouterr().out
+        assert "NOT equivalent" in out
+        assert "counterexample witness" in out
+        assert "delta-debug shrink" in out
+        assert "1-minimal" in out
+
+    def test_no_shrink_flag_skips_the_shrink(
+        self, unequal_pair: tuple[Path, Path], capsys
+    ) -> None:
+        a, b = unequal_pair
+        assert cli.main(["equiv", str(a), str(b), "--no-shrink"]) == 3
+        out = capsys.readouterr().out
+        assert "counterexample witness" in out
+        assert "delta-debug shrink" not in out
+
+    def test_json_verdict_not_equivalent(
+        self, unequal_pair: tuple[Path, Path], capsys
+    ) -> None:
+        import json as _json
+
+        a, b = unequal_pair
+        assert cli.main(["equiv", str(a), str(b), "--json"]) == 3
+        data = _json.loads(capsys.readouterr().out)
+        assert data["equivalent"] is False
+        assert data["method"] == "exact-unitary"
+        assert data["witness"]["basis_index"] == 0
+        assert data["witness"]["max_error"] > 0.9
+        assert data["shrink"]["gates_after"] < data["shrink"]["gates_before"]
+        assert data["shrink"]["a"].startswith("qubits 1")
+
+    def test_json_verdict_equivalent(self, equal_pair: tuple[Path, Path], capsys) -> None:
+        import json as _json
+
+        a, b = equal_pair
+        assert cli.main(["equiv", str(a), str(b), "--json"]) == 0
+        data = _json.loads(capsys.readouterr().out)
+        assert data["equivalent"] is True
+        assert data["witness"] is None
+        assert data["shrink"] is None
+
+    def test_qubit_count_mismatch_exits_3(self, tmp_path: Path, capsys) -> None:
+        a = tmp_path / "a.qf"
+        a.write_text("qubits 1\nh q0\n", encoding="ascii")
+        b = tmp_path / "b.qf"
+        b.write_text("qubits 2\nh q0\n", encoding="ascii")
+        assert cli.main(["equiv", str(a), str(b)]) == 3
+        out = capsys.readouterr().out
+        assert "qubit counts" in out
+
+    def test_missing_file_exits_1(self, tmp_path: Path, capsys) -> None:
+        a = tmp_path / "a.qf"
+        a.write_text("qubits 1\n", encoding="ascii")
+        assert cli.main(["equiv", str(a), str(tmp_path / "nope.qf")]) == 1
+        assert "error" in capsys.readouterr().err
+
+    def test_syntax_error_names_the_offending_file(self, tmp_path: Path, capsys) -> None:
+        a = tmp_path / "a.qf"
+        a.write_text("qubits 1\n", encoding="ascii")
+        b = tmp_path / "b.qf"
+        b.write_text("qubits 1\nfoo q0\n", encoding="ascii")
+        assert cli.main(["equiv", str(a), str(b)]) == 2
+        assert "b.qf:2:1: error:" in capsys.readouterr().err
+
+    def test_too_many_qubits_exits_2(self, tmp_path: Path, capsys) -> None:
+        a = tmp_path / "a.qf"
+        a.write_text("qubits 11\nh q0\n", encoding="ascii")
+        b = tmp_path / "b.qf"
+        b.write_text("qubits 11\n", encoding="ascii")
+        assert cli.main(["equiv", str(a), str(b)]) == 2
+        assert "at most 10" in capsys.readouterr().err
+
+    def test_qasm_inputs_accepted(self, program: Path, qasm_program: Path, capsys) -> None:
+        # The DSL bell program and its QASM twin are the same circuit.
+        assert cli.main(["equiv", str(program), str(qasm_program)]) == 0
+        assert "equivalent" in capsys.readouterr().out
+
+
 class TestSubprocessEndToEnd:
     def run_cli(self, *args: str) -> subprocess.CompletedProcess:
         return subprocess.run(
@@ -315,6 +421,16 @@ class TestSubprocessEndToEnd:
         assert text.startswith("OPENQASM 2.0;")
         assert "x q[1];" not in text  # the x x pair was cancelled
         assert "measure q[0] -> c[0];" in text
+
+    def test_equiv_end_to_end_exit_codes(self, program: Path, tmp_path: Path) -> None:
+        same = self.run_cli("equiv", str(program), str(program))
+        assert same.returncode == 0
+        assert "equivalent up to global phase" in same.stdout
+        broken = tmp_path / "broken.qf"
+        broken.write_text(PROGRAM + "z q0\n", encoding="ascii")
+        differs = self.run_cli("equiv", str(program), str(broken))
+        assert differs.returncode == 3
+        assert "counterexample witness" in differs.stdout
 
     def test_version(self) -> None:
         result = self.run_cli("--version")
