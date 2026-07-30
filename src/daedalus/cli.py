@@ -101,6 +101,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "(N defaults to the circuit's qubit count)",
     )
     route_parser.add_argument(
+        "--strategy",
+        choices=("greedy", "sabre"),
+        default="greedy",
+        help="routing strategy: greedy (default) inserts SWAPs along shortest "
+        "paths in program order; sabre adds lookahead SWAP scoring and "
+        "reverse-traversal initial-layout selection",
+    )
+    route_parser.add_argument(
         "--emit",
         choices=("ir", "ascii", "svg", "qasm", "dot"),
         default="ascii",
@@ -225,13 +233,18 @@ def _format_stats(
 def _run_route(args: argparse.Namespace, original: Circuit) -> int:
     try:
         coupling = _parse_coupling(args.coupling, original.num_qubits)
-        result = route(original, coupling)
+        result = route(original, coupling, strategy=args.strategy)
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
-    _report_routing(original, result, coupling)
+    _report_routing(original, result, coupling, strategy=args.strategy)
     if args.verify:
-        check = check_routing_equivalence(original, result.circuit, result.final_layout)
+        check = check_routing_equivalence(
+            original,
+            result.circuit,
+            result.final_layout,
+            initial_layout=result.initial_layout,
+        )
         if not check.equivalent:
             print(
                 f"verify: routing changed semantics (max error {check.max_error:.3e}); "
@@ -252,13 +265,22 @@ def _run_route(args: argparse.Namespace, original: Circuit) -> int:
     return _write_output(output, args.out)
 
 
-def _report_routing(original: Circuit, result: RoutingResult, coupling: CouplingMap) -> None:
+def _report_routing(
+    original: Circuit, result: RoutingResult, coupling: CouplingMap, *, strategy: str
+) -> None:
     print(
         f"routed onto a {coupling.num_qubits}-qubit coupling map: "
         f"{result.swaps_added} swap(s) added, "
         f"depth {_depth(original)} -> {_depth(result.circuit)}",
         file=sys.stderr,
     )
+    if strategy == "sabre":
+        # The greedy strategy always starts from the trivial layout, so the
+        # line is only printed when sabre has actually chosen a placement.
+        print(
+            f"initial layout (logical -> physical): {result.initial_layout}",
+            file=sys.stderr,
+        )
     print(f"final layout (logical -> physical): {result.final_layout}", file=sys.stderr)
 
 
