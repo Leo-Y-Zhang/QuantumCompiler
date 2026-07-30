@@ -3,11 +3,44 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.1.0] - 2026-07-30
+
+The "sabre" release: a second, smarter routing strategy — still proven correct
+on every circuit it routes. 398 -> 456 tests.
+
+### Added
+
+- **SABRE-lite routing strategy** (`route(..., strategy="sabre")`, CLI
+  `route --strategy greedy|sabre`; greedy remains the default with byte-for-byte
+  identical output): front layer of the dependency DAG, candidate SWAPs scored
+  by summed BFS distance of the front layer plus a weighted lookahead window,
+  and reverse-traversal initial-layout selection (one forward + one backward
+  pass), after Li, Ding & Xie 2019. Deliberately *lite*: no decay factor, a
+  single reverse-traversal round. Fully deterministic (fixed tie-break
+  orderings, no randomness) with a greedy shortest-path fallback on stalls so
+  routing always terminates. Every sabre-routed circuit is proven equivalent by
+  the routing oracle; the test suite proves all example circuits on all five
+  topologies.
+- `check_routing_equivalence` accepts an optional `initial_layout` so the
+  oracle can verify routers that choose a non-trivial starting placement
+  (default stays the trivial layout — the greedy path is unchanged).
+- `RoutingResult.initial_layout`: where each logical qubit starts (trivial for
+  greedy; note this is a new second positional field).
+- **Routing benchmark** (`bench.py`, `python -m daedalus.bench`): Markdown
+  table of swaps added and depth delta, sabre vs greedy, over the committed
+  examples on the five test topologies; the README table is its verbatim
+  output, including the cases where sabre is not better.
+
+### Fixed
+
+- CHANGELOG 1.0.0 entry said "251 -> 395 tests"; the shipped 1.0.0 suite was
+  398 tests.
+
 ## [1.0.0] - 2026-07-09
 
 The "verified compiler" release: from a verified-rewrite demo to a small but
 genuine optimizing quantum compiler where the optimizer, an exact proof engine,
-and a router are each proven correct. 251 -> 395 tests.
+and a router are each proven correct. 251 -> 398 tests.
 
 ### Added
 
