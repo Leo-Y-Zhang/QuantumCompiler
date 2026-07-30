@@ -5,13 +5,15 @@ Exit codes
 - ``0`` success
 - ``1`` I/O error (e.g. input file not readable)
 - ``2`` usage error or source syntax error (position printed to stderr)
-- ``3`` ``--verify`` failed: optimized circuit is not equivalent
+- ``3`` verification failed: ``--verify``/``--proof`` rejected a circuit, or
+  ``equiv`` proved the two circuits are not equivalent
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -21,6 +23,7 @@ from daedalus.analyze import analyze, format_report, metrics_to_dict
 from daedalus.dot import to_dot
 from daedalus.draw_ascii import column_layout, render_ascii
 from daedalus.draw_svg import render_svg
+from daedalus.equiv import ShrinkResult, Witness, find_witness, format_basis, shrink_counterexample
 from daedalus.errors import DaedalusError
 from daedalus.ir import Circuit, dump
 from daedalus.parser import parse
@@ -28,7 +31,13 @@ from daedalus.passes import DeadCodeElimination, PassManager, PassStats, default
 from daedalus.qasm import emit_qasm, parse_qasm
 from daedalus.route import RoutingResult, route
 from daedalus.topology import CouplingMap
-from daedalus.verify import check_equivalence, check_routing_equivalence, prove_equivalence
+from daedalus.verify import (
+    DEFAULT_ATOL,
+    ProofResult,
+    check_equivalence,
+    check_routing_equivalence,
+    prove_equivalence,
+)
 
 _DCE_WARNING = (
     "warning: dead-code elimination changes unobserved state; "
@@ -130,12 +139,36 @@ def build_arg_parser() -> argparse.ArgumentParser:
     analyze_parser.add_argument(
         "--json", action="store_true", help="emit metrics as JSON instead of a report"
     )
+
+    equiv_parser = subcommands.add_parser(
+        "equiv",
+        help="prove two circuits equivalent up to global phase; on failure "
+        "emit a counterexample witness and a delta-debugged minimal form",
+    )
+    equiv_parser.add_argument(
+        "file_a", help="first circuit (.qasm is parsed as OpenQASM 2.0, else DSL)"
+    )
+    equiv_parser.add_argument(
+        "file_b", help="second circuit (.qasm is parsed as OpenQASM 2.0, else DSL)"
+    )
+    equiv_parser.add_argument(
+        "--no-shrink",
+        action="store_true",
+        help="on failure, report the witness but skip the delta-debug shrink",
+    )
+    equiv_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="emit the verdict (plus any witness and shrink) as JSON",
+    )
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     """CLI entry point; returns the process exit code."""
     args = build_arg_parser().parse_args(argv)
+    if args.command == "equiv":
+        return _run_equiv(args)
     try:
         source = Path(args.file).read_text(encoding="utf-8")
     except OSError as exc:
@@ -324,6 +357,165 @@ def _emit_circuit(emit: str, circuit: Circuit) -> str:
     if emit == "dot":
         return to_dot(circuit)
     return render_ascii(circuit) + "\n"
+
+
+def _run_equiv(args: argparse.Namespace) -> int:
+    """Prove file_a and file_b equivalent; witness + shrink on failure."""
+    circuits: list[Circuit] = []
+    for path in (args.file_a, args.file_b):
+        try:
+            source = Path(path).read_text(encoding="utf-8")
+        except OSError as exc:
+            print(f"error: cannot read '{path}': {exc.strerror or exc}", file=sys.stderr)
+            return 1
+        parser_fn = parse_qasm if path.lower().endswith(".qasm") else parse
+        try:
+            circuits.append(parser_fn(source))
+        except DaedalusError as exc:
+            print(exc.format(path), file=sys.stderr)
+            return 2
+    a, b = circuits
+    try:
+        proof = prove_equivalence(a, b)
+        witness = None if proof.equivalent else find_witness(a, b)
+        shrink: ShrinkResult | None = None
+        if not proof.equivalent and not args.no_shrink and a.num_qubits == b.num_qubits:
+            shrink = shrink_counterexample(a, b)
+    except ValueError as exc:  # circuits beyond the simulator's qubit cap
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    if args.json:
+        print(json.dumps(_equiv_json(proof, witness, shrink), indent=2))
+    else:
+        _print_equiv_report(proof, witness, shrink)
+    return 0 if proof.equivalent else 3
+
+
+def _print_equiv_report(
+    proof: ProofResult, witness: Witness | None, shrink: ShrinkResult | None
+) -> None:
+    print(proof.summary())
+    if proof.equivalent:
+        return
+    if proof.detail == "qubit counts differ":
+        print("no witness: the circuits have different qubit counts")
+        return
+    if witness is None:
+        print(
+            "no witness found: every sampled battery input agrees "
+            "(the difference lies beyond the sampled inputs)"
+        )
+    else:
+        print(
+            f"counterexample witness: input {witness.label()} "
+            f"(battery input {witness.input_index})"
+        )
+        print(
+            "  disagreeing amplitudes (error = |B - phase*A|, "
+            f"shared phase {_format_amplitude(witness.phase)}):"
+        )
+        for row in _witness_rows(witness):
+            print(row)
+    if shrink is not None:
+        print(
+            f"delta-debug shrink: {shrink.gates_before} -> {shrink.gates_after} "
+            f"gates across the pair ({shrink.oracle_calls} oracle calls)"
+        )
+        print("1-minimal: removing any single remaining gate makes the pair equivalent")
+        for name, circuit in (("A", shrink.circuit_a), ("B", shrink.circuit_b)):
+            print(f"  {name} ({len(circuit.gates)} gate(s)):")
+            lines = _gate_lines(circuit)
+            for line in lines:
+                print(f"    {line}")
+            if not lines:
+                print("    (no gates)")
+
+
+def _witness_rows(witness: Witness) -> list[str]:
+    """Text rows for the worst disagreeing amplitudes, largest error first."""
+    num_qubits = len(witness.output_a).bit_length() - 1
+    return [
+        f"    {format_basis(index, num_qubits)}: "
+        f"A {_format_amplitude(amp_a)}  B {_format_amplitude(amp_b)}  "
+        f"error {error:.3e}"
+        for error, index, amp_a, amp_b in _ranked_disagreements(witness)
+    ]
+
+
+def _format_amplitude(amplitude: complex) -> str:
+    return f"{amplitude.real:+.6f}{amplitude.imag:+.6f}j"
+
+
+def _equiv_json(
+    proof: ProofResult, witness: Witness | None, shrink: ShrinkResult | None
+) -> dict[str, object]:
+    """Strict-JSON view of the verdict (non-finite errors become null)."""
+    num_qubits = len(witness.output_a).bit_length() - 1 if witness else 0
+    witness_data: dict[str, object] | None = None
+    if witness is not None:
+        witness_data = {
+            "input": witness.label(),
+            "battery_index": witness.input_index,
+            "basis_index": witness.basis_index,
+            "max_error": witness.max_error,
+            "phase": [witness.phase.real, witness.phase.imag],
+            "disagreements": [
+                {
+                    "state": format_basis(index, num_qubits),
+                    "a": [amp_a.real, amp_a.imag],
+                    "b": [amp_b.real, amp_b.imag],
+                    "error": error,
+                }
+                for error, index, amp_a, amp_b in _ranked_disagreements(witness)
+            ],
+        }
+    shrink_data: dict[str, object] | None = None
+    if shrink is not None:
+        shrink_data = {
+            "gates_before": shrink.gates_before,
+            "gates_after": shrink.gates_after,
+            "oracle_calls": shrink.oracle_calls,
+            "a": dump(shrink.circuit_a),
+            "b": dump(shrink.circuit_b),
+        }
+    return {
+        "equivalent": proof.equivalent,
+        "method": proof.method,
+        "max_error": proof.max_error if math.isfinite(proof.max_error) else None,
+        "process_fidelity": proof.process_fidelity,
+        "detail": proof.detail,
+        "witness": witness_data,
+        "shrink": shrink_data,
+    }
+
+
+def _ranked_disagreements(
+    witness: Witness, limit: int = 4
+) -> list[tuple[float, int, complex, complex]]:
+    """The *limit* worst (error, index, amp A, amp B) rows of a witness.
+
+    Errors use the witness's shared alignment phase; ties break on the lower
+    amplitude index so the ordering is deterministic.
+    """
+    ranked = sorted(
+        (
+            (abs(bb - witness.phase * aa), index, aa, bb)
+            for index, (aa, bb) in enumerate(
+                zip(witness.output_a, witness.output_b, strict=True)
+            )
+        ),
+        key=lambda item: (-item[0], item[1]),
+    )
+    return [row for row in ranked[:limit] if row[0] > DEFAULT_ATOL]
+
+
+def _gate_lines(circuit: Circuit) -> list[str]:
+    """The gate statements of *circuit* in DSL syntax, register headers dropped."""
+    return [
+        line
+        for line in dump(circuit).splitlines()
+        if line and not line.startswith(("qubits ", "bits "))
+    ]
 
 
 def _run_analyze(circuit: Circuit, as_json: bool) -> int:
