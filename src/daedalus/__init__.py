@@ -7,6 +7,7 @@ Python standard library only. Not a production quantum compiler.
 
 from daedalus.analyze import CircuitMetrics, analyze
 from daedalus.dot import to_dot
+from daedalus.equiv import ShrinkResult, Witness, find_witness, shrink_counterexample
 from daedalus.ir import Circuit, Gate
 from daedalus.parser import parse
 from daedalus.qasm import emit_qasm, parse_qasm
@@ -32,17 +33,21 @@ __all__ = [
     "Gate",
     "ProofResult",
     "RoutingResult",
+    "ShrinkResult",
+    "Witness",
     "__version__",
     "analyze",
     "check_equivalence",
     "check_routing_equivalence",
     "circuit_unitary",
     "emit_qasm",
+    "find_witness",
     "parse",
     "parse_qasm",
     "prove_circuit_equivalence",
     "prove_equivalence",
     "route",
+    "shrink_counterexample",
     "simulate",
     "to_dot",
 ]
