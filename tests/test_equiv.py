@@ -72,9 +72,41 @@ class TestFindWitness:
         assert abs(witness.output_a[0] - 1) < 1e-12  # identity keeps |0>
         assert abs(witness.output_b[1] - 1) < 1e-12  # x maps |0> to |1>
 
+    def test_phase_anchor_is_the_lowest_near_peak_index(self) -> None:
+        # 8-qubit GHZ ladder ending t vs tdg: the GHZ state has two amplitudes
+        # tied at 1/sqrt(2), and platform rounding must not be allowed to pick
+        # the anchor between them. The anchor is defined as the lowest index
+        # within 1e-9 of the peak, i.e. |00000000>, giving phase 1 and a worst
+        # row (|11111111>) whose raw A/B amplitudes visibly differ.
+        ladder = "qubits 8\nh q0\n" + "".join(f"cx q{i}, q{i + 1}\n" for i in range(7))
+        a = parse(ladder + "t q7\n")
+        b = parse(ladder + "tdg q7\n")
+        witness = find_witness(a, b)
+        assert witness is not None
+        assert witness.basis_index == 0
+        assert abs(witness.phase - 1) < 1e-9
+        assert witness.worst_index == 255
+        assert abs(witness.max_error - 1.0) < 1e-9
+        assert abs(witness.output_a[255] - witness.output_b[255]) > 0.9
+
     def test_mismatched_qubit_counts_have_no_witness(self) -> None:
         a = parse("qubits 1\nh q0\n")
         b = parse("qubits 2\nh q0\n")
+        assert find_witness(a, b) is None
+
+    def test_none_witness_despite_negative_verdict_near_tolerance(self) -> None:
+        # Frobenius-vs-per-amplitude metric mismatch (documented in the
+        # find_witness docstring): a 2-qubit rz(9.5e-10) vs identity gives an
+        # exact-engine diff norm of sqrt(2) * 9.5e-10 > atol (accumulated over
+        # the whole unitary) while no single amplitude of any battery input
+        # errs above atol. The oracle says NOT equivalent; the witness search
+        # honestly comes back empty. Every basis state IS sampled here, so the
+        # cause is the metric, not battery coverage.
+        a = parse("qubits 2\n")
+        b = parse("qubits 2\nrz(0.00000000095) q0\n")
+        proof = prove_equivalence(a, b)
+        assert not proof.equivalent
+        assert 1e-9 < proof.max_error < 2e-9
         assert find_witness(a, b) is None
 
 

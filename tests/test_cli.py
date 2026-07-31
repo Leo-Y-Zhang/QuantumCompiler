@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from daedalus import cli
+from daedalus.equiv import Witness
 from daedalus.verify import EquivalenceResult
 
 PROGRAM = """\
@@ -42,6 +43,16 @@ class TestCompile:
         out = capsys.readouterr().out
         assert "[H]" in out
         assert "AFTER" not in out
+
+    def test_non_utf8_input_exits_1_cleanly(self, tmp_path: Path, capsys) -> None:
+        # A binary/wrongly-encoded file must produce the one-line I/O error,
+        # not a UnicodeDecodeError traceback.
+        bad = tmp_path / "bin.qf"
+        bad.write_bytes(b"\xff\xfe\x00binary")
+        assert cli.main(["compile", str(bad)]) == 1
+        err = capsys.readouterr().err
+        assert "cannot read" in err
+        assert "Traceback" not in err
 
     def test_emit_ir(self, program: Path, capsys) -> None:
         assert cli.main(["compile", str(program), "-O", "--emit", "ir"]) == 0
@@ -388,6 +399,141 @@ class TestEquiv:
         assert cli.main(["equiv", str(program), str(qasm_program)]) == 0
         assert "equivalent" in capsys.readouterr().out
 
+    def test_measure_only_difference_prints_the_caveat(
+        self, tmp_path: Path, capsys
+    ) -> None:
+        # Two circuits that differ only in WHICH qubit they measure compare
+        # equal on pre-measurement statevectors; the verdict must say so
+        # explicitly instead of an unqualified green.
+        a = tmp_path / "a.qf"
+        a.write_text("qubits 2\nbits 1\nh q0\nmeasure q0 -> c0\n", encoding="ascii")
+        b = tmp_path / "b.qf"
+        b.write_text("qubits 2\nbits 1\nh q0\nmeasure q1 -> c0\n", encoding="ascii")
+        assert cli.main(["equiv", str(a), str(b)]) == 0
+        out = capsys.readouterr().out
+        assert "equivalent up to global phase" in out
+        assert "measure gates are ignored" in out
+        assert "pre-measurement" in out
+
+    def test_no_measure_means_no_caveat(
+        self, equal_pair: tuple[Path, Path], capsys
+    ) -> None:
+        a, b = equal_pair
+        assert cli.main(["equiv", str(a), str(b)]) == 0
+        assert "measure gates are ignored" not in capsys.readouterr().out
+
+    def test_json_measure_ignored_field(self, tmp_path: Path, capsys) -> None:
+        import json as _json
+
+        a = tmp_path / "a.qf"
+        a.write_text("qubits 1\nbits 1\nmeasure q0 -> c0\n", encoding="ascii")
+        b = tmp_path / "b.qf"
+        b.write_text("qubits 1\nbits 1\n", encoding="ascii")
+        assert cli.main(["equiv", str(a), str(b), "--json"]) == 0
+        data = _json.loads(capsys.readouterr().out)
+        assert data["equivalent"] is True
+        assert data["measure_ignored"] is True
+
+    def test_json_measure_ignored_false_without_measure(
+        self, equal_pair: tuple[Path, Path], capsys
+    ) -> None:
+        import json as _json
+
+        a, b = equal_pair
+        assert cli.main(["equiv", str(a), str(b), "--json"]) == 0
+        assert _json.loads(capsys.readouterr().out)["measure_ignored"] is False
+
+    def test_non_utf8_input_exits_1_cleanly(self, tmp_path: Path, capsys) -> None:
+        bad = tmp_path / "bin.qf"
+        bad.write_bytes(b"\xff\xfe\x00binary")
+        ok = tmp_path / "ok.qf"
+        ok.write_text("qubits 1\n", encoding="ascii")
+        assert cli.main(["equiv", str(bad), str(ok)]) == 1
+        err = capsys.readouterr().err
+        assert "cannot read" in err
+        assert "Traceback" not in err
+
+    def test_witness_rows_show_raw_difference(
+        self, unequal_pair: tuple[Path, Path], capsys
+    ) -> None:
+        a, b = unequal_pair
+        assert cli.main(["equiv", str(a), str(b)]) == 3
+        out = capsys.readouterr().out
+        assert "raw = |B - A|" in out
+        assert " raw 1.000e+00" in out
+
+    def test_degenerate_alignment_factor_is_labelled(
+        self, tmp_path: Path, capsys
+    ) -> None:
+        # Bell vs Bell-then-x: B vanishes at |00> where A peaks, so the anchor
+        # ratio is 0 - a magnitude-0 number must not be presented as a phase
+        # without comment.
+        a = tmp_path / "a.qf"
+        a.write_text("qubits 2\nh q0\ncx q0, q1\n", encoding="ascii")
+        b = tmp_path / "b.qf"
+        b.write_text("qubits 2\nh q0\ncx q0, q1\nx q0\n", encoding="ascii")
+        assert cli.main(["equiv", str(a), str(b)]) == 3
+        out = capsys.readouterr().out
+        assert "shared phase +0.000000+0.000000j" in out
+        assert "alignment factor magnitude 0.000" in out
+        assert "not a pure phase" in out
+
+    def test_unit_magnitude_phase_gets_no_degenerate_note(
+        self, tmp_path: Path, capsys
+    ) -> None:
+        # Bell preparation ending t vs tdg anchors on |00> where both agree,
+        # so the shared phase is a genuine unit-magnitude phase - no note.
+        prep = "qubits 2\nh q0\ncx q0, q1\n"
+        a = tmp_path / "a.qf"
+        a.write_text(prep + "t q1\n", encoding="ascii")
+        b = tmp_path / "b.qf"
+        b.write_text(prep + "tdg q1\n", encoding="ascii")
+        assert cli.main(["equiv", str(a), str(b)]) == 3
+        out = capsys.readouterr().out
+        assert "shared phase +1.000000+0.000000j" in out
+        assert "alignment factor magnitude" not in out
+
+    def test_no_witness_message_is_honest_about_the_metric(
+        self, tmp_path: Path, capsys
+    ) -> None:
+        # The 2-qubit near-tolerance pair (see test_equiv.py): oracle says NOT
+        # equivalent on the accumulated Frobenius norm, yet no single sampled
+        # amplitude errs above atol. The old message blamed unsampled inputs,
+        # which is false here - every basis state IS sampled at 2 qubits.
+        a = tmp_path / "a.qf"
+        a.write_text("qubits 2\n", encoding="ascii")
+        b = tmp_path / "b.qf"
+        b.write_text("qubits 2\nrz(0.00000000095) q0\n", encoding="ascii")
+        assert cli.main(["equiv", str(a), str(b)]) == 3
+        out = capsys.readouterr().out
+        assert "no witness found" in out
+        assert "per-amplitude tolerance" in out
+        assert "the proof verdict above is the authority" in out
+
+
+class TestWitnessRendering:
+    def test_largest_raw_row_is_appended_when_not_in_top_aligned(self) -> None:
+        # Aligned-error ranking alone can show only rows whose raw amplitudes
+        # look identical (a pure relative-phase disagreement); the row with the
+        # largest raw |B - A| must be appended so a visibly differing amplitude
+        # pair is always on display.
+        witness = Witness(
+            input_index=0,
+            basis_index=0,
+            input_state=[1 + 0j] + [0j] * 7,
+            output_a=[0.5 + 0j, 0.4 + 0j, 0.35 + 0j, 0.3 + 0j, 0.5 + 0j, 0j, 0j, 0j],
+            output_b=[0.5 + 0j, 0.4 + 0j, 0.35 + 0j, 0.3 + 0j, -0.5 + 0.1j, 0j, 0j, 0j],
+            phase=-1 + 0j,
+            max_error=1.0,
+            worst_index=0,
+        )
+        rows = cli._ranked_disagreements(witness)
+        assert [row[2] for row in rows] == [0, 1, 2, 3, 4]
+        assert rows[-1][1] > 0.9  # the appended row really is the raw-worst one
+        rendered = cli._witness_rows(witness)
+        assert len(rendered) == 5
+        assert all(" raw " in line for line in rendered)
+
 
 class TestSubprocessEndToEnd:
     def run_cli(self, *args: str) -> subprocess.CompletedProcess:
@@ -435,7 +581,7 @@ class TestSubprocessEndToEnd:
     def test_version(self) -> None:
         result = self.run_cli("--version")
         assert result.returncode == 0
-        assert "daedalus 1.1.0" in result.stdout
+        assert "daedalus 1.2.0" in result.stdout
 
     def test_usage_error_exit_2(self) -> None:
         result = self.run_cli()
