@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "daedalus"
-version = "1.1.0"
+version = "1.2.0"
 description = "Toy educational quantum-circuit DSL compiler with verified optimization passes. Python stdlib only."
 readme = "README.md"
 license = { text = "Proprietary - All Rights Reserved" }
