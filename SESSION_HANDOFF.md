@@ -9,16 +9,30 @@ verified quantum compiler v1.0.0") is on `main` and pushed. Any older copy of
 this file listing Step 8 as "the exact next step" is EXPIRED. There is nothing
 left of that program to resume.
 
-## Current state (2026-07-30): v1.1.0 sabre routing round
+## Current state (2026-07-31): v1.2.0 equiv round
 
-- Feature round complete on `main`: SABRE-lite routing strategy
-  (`route --strategy sabre`), `check_routing_equivalence` initial-layout
-  support, `bench.py` sabre-vs-greedy benchmark, README/CHANGELOG updated,
-  version bumped to 1.1.0.
-- Gates at the end of the round: 456 pytest green, `ruff check .` clean,
+- Feature round complete on `main`: `daedalus equiv A B` standalone
+  equivalence prover (src/daedalus/equiv.py + CLI wiring) — verdict via
+  `prove_equivalence` reuse, counterexample witness search over the oracle
+  battery, ddmin delta-debug shrink to a 1-minimal pair; `--no-shrink`,
+  `--json` (strict), exit 3 on proven non-equivalence.
+- Adversarial review round closed: all five minor findings fixed (non-UTF-8
+  reads exit 1 cleanly, measure-ignored caveat surfaced in report + JSON,
+  honest no-witness message for the Frobenius-vs-per-amplitude tolerance
+  boundary, degenerate alignment factor labelled, deterministic phase anchor
+  + raw |B - A| column in witness rows).
+- README equiv section (both output blocks run-verified), CHANGELOG 1.2.0,
+  version bumped to 1.2.0.
+- Gates at the end of the round: 493 pytest green, `ruff check .` clean,
   `mypy src` (strict) clean.
-- **Committed locally, NOT pushed** — pushing was out of scope for the round.
-  Next step for a resuming session: push `main` after the operator confirms.
+- **Committed locally, NOT pushed** — the orchestrator pushes after its
+  independent verification sweep.
+
+## Previous round (2026-07-30): v1.1.0 sabre routing
+
+- SABRE-lite routing strategy (`route --strategy sabre`),
+  `check_routing_equivalence` initial-layout support, `bench.py`
+  sabre-vs-greedy benchmark; 456 pytest green at the time.
 
 ## Historical record — "to the max" build order (all done)
 - [x] Step 0 — Tooling gate: ruff + mypy + CI lint job
