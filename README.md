@@ -6,8 +6,9 @@
 quantum circuits and proves its rewrites never lose the way.*
 
 **A toy educational quantum-circuit DSL compiler with *verified* optimization,
-an *exact* unitary proof mode, and a *verified* SWAP-insertion router. Pure
-Python stdlib — zero runtime dependencies.**
+an *exact* unitary proof mode, a *verified* SWAP-insertion router, and a
+standalone two-circuit equivalence prover with delta-debugged counterexamples.
+Pure Python stdlib — zero runtime dependencies.**
 
 Daedalus compiles a small quantum-circuit DSL through a real compiler pipeline
 (lexer → recursive-descent parser → IR → pass manager), *proves* its
@@ -221,6 +222,57 @@ and **greedy ends 2 moments shallower** than sabre (depth −1 vs +1) — the
 depth metric is span-blocking, so sabre's non-trivial placement can cost
 diagram moments even at equal swap count.
 
+## Any two circuits: `daedalus equiv`
+
+The oracle that certifies the optimizer and the router is also exposed
+directly: `daedalus equiv A B` proves *any* two circuits (DSL or QASM, mixed
+freely) equivalent up to global phase — exact unitary up to 7 qubits, the
+randomized battery above that. Comparing a circuit against its optimized form:
+
+```
+$ daedalus compile examples/bell.qf --opt --emit ir --out bell_opt.qf
+$ daedalus equiv examples/bell.qf bell_opt.qf
+proof: exact unitary check, equivalent up to global phase (diff norm 0.000e+00, process fidelity 1.0000000000, dimension 4)
+note: measure gates are ignored - the verdict compares pre-measurement statevectors, so circuits measuring different qubits can still be equivalent here
+```
+
+That note is printed whenever either input contains a `measure` gate: the
+verdict is about pre-measurement statevectors (the simulator's documented
+semantics), so two circuits that differ only in *what they measure* count as
+equivalent under this convention — and the tool says so rather than handing
+back an unqualified green.
+
+On failure it does not just say "no". It emits a **counterexample witness** —
+a concrete input where the outputs disagree, with the worst amplitude rows
+showing both the phase-aligned error `|B - phase*A|` and the raw `|B - A|`
+difference — and then **delta-debugs** the failing pair with the classic ddmin
+algorithm (Zeller & Hildebrandt 2002) over the union of both gate lists. Here
+`a.qf` and `b.qf` are a Bell preparation ending in `t q1` vs `tdg q1`:
+
+```
+$ daedalus equiv a.qf b.qf
+proof: exact unitary check, NOT equivalent (diff norm 2.000e+00, process fidelity 0.7071067812, dimension 4)
+counterexample witness: input |00> (battery input 0)
+  disagreeing amplitudes (error = |B - phase*A|, raw = |B - A|, shared phase +1.000000+0.000000j):
+    |11>: A +0.500000+0.500000j  B +0.500000-0.500000j  error 1.000e+00  raw 1.000e+00
+delta-debug shrink: 6 -> 1 gates across the pair (4 oracle calls)
+1-minimal: removing any single remaining gate makes the pair equivalent
+  A (1 gate(s)):
+    h q0
+  B (0 gate(s)):
+    (no gates)
+```
+
+**Honest read of that shrink:** 1-minimal means a *minimal explanation of the
+disagreement*, not the textual diff of the two programs — here ddmin
+legitimately lands on `h q0` vs the empty circuit, a pair that already
+disagrees all by itself. The test suite asserts the 1-minimality property of
+every shrink (still failing, and dropping any single remaining gate restores
+equivalence) rather than hardcoding expected gate lists. `--no-shrink` skips
+the ddmin pass, `--json` emits the whole verdict — witness, shrink, and the
+`measure_ignored` flag — as strict JSON, and a proven non-equivalence exits
+with code 3, same as `--verify`/`--proof` refusals.
+
 ## Resource analysis and the dependency DAG
 
 ```
@@ -280,7 +332,7 @@ python -m venv .venv
 .venv/Scripts/python.exe -m pip install -e ".[dev]"   # Windows
 # .venv/bin/python -m pip install -e ".[dev]"          # Linux/macOS
 
-.venv/Scripts/python.exe -m pytest -q                  # 456 tests
+.venv/Scripts/python.exe -m pytest -q                  # 493 tests
 .venv/Scripts/python.exe -m ruff check .               # lint
 .venv/Scripts/python.exe -m mypy src                   # strict types
 ```
@@ -290,13 +342,15 @@ CLI (also runnable as `python -m daedalus`):
 ```
 daedalus compile FILE [--opt] [--emit ir|ascii|svg|qasm|dot] [--verify] [--proof] [--dce] [--out FILE]
 daedalus route   FILE --coupling line|ring|full[:N]|grid:RxC [--strategy greedy|sabre] [--emit …] [--verify] [--out FILE]
+daedalus equiv   FILE_A FILE_B [--no-shrink] [--json]
 daedalus analyze FILE [--json]
 daedalus stats   FILE [--dce]
 ```
 
 Files ending in `.qasm` are parsed as OpenQASM 2.0; everything else as the DSL.
 Exit codes: `0` success, `1` I/O error, `2` usage/syntax error, `3` verification
-failed.
+failed (`--verify`/`--proof` rejected a circuit, or `equiv` proved the pair not
+equivalent).
 
 ## Architecture
 
@@ -310,6 +364,7 @@ src/daedalus/
   sim.py         pure-stdlib statevector simulator (complex lists, <=10 qubits)
   unitary.py     exact 2**n unitary construction + up-to-global-phase comparison
   verify.py      randomized + exact equivalence checking, incl. routing (permutation-aware)
+  equiv.py       two-circuit prover front end: witness search + ddmin counterexample shrink
   topology.py    coupling maps (line/ring/grid/full/custom) with BFS distance
   route.py       verified SWAP-insertion router (greedy + SABRE-lite strategies)
   bench.py       sabre-vs-greedy swaps/depth benchmark over the examples
@@ -318,11 +373,12 @@ src/daedalus/
   draw_svg.py    hand-rolled SVG writer (no deps)
   dot.py         Graphviz DOT export of the dependency DAG
   qasm.py        OpenQASM 2.0 emitter + documented-subset importer
-  cli.py         argparse CLI (compile / route / analyze / stats)
-tests/           456 pytest tests: parser errors by position, every pass, hand-
+  cli.py         argparse CLI (compile / route / equiv / analyze / stats)
+tests/           493 pytest tests: parser errors by position, every pass, hand-
                  computed amplitudes (Bell/GHZ), exact-vs-randomized agreement,
                  verified routing (both strategies) across five topologies, the
-                 QFT-equals-DFT proof, SVG/DOT well-formedness, QASM roundtrips,
+                 QFT-equals-DFT proof, equivalence witnesses + 1-minimality of
+                 every ddmin shrink, SVG/DOT well-formedness, QASM roundtrips,
                  CLI e2e
 ```
 

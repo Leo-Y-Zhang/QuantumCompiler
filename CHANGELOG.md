@@ -3,6 +3,59 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.2.0] - 2026-07-31
+
+The "equiv" release: the equivalence oracle becomes a standalone two-circuit
+prover with counterexample witnesses and delta-debugged minimal cores.
+456 -> 493 tests.
+
+### Added
+
+- **`daedalus equiv FILE_A FILE_B`** (`--no-shrink`, `--json`): proves two
+  circuits equivalent up to global phase using the same oracle that certifies
+  the optimizer and the router (exact unitary up to 7 qubits, randomized
+  battery above). On failure it emits a **counterexample witness** — the first
+  battery input where the circuits disagree, with the worst amplitude rows
+  showing both the phase-aligned error `|B - phase*A|` and the raw `|B - A|`
+  difference — and a **ddmin delta-debug shrink** (Zeller & Hildebrandt 2002)
+  over the union of both gate lists down to a **1-minimal** core: removing any
+  single remaining gate makes the pair equivalent (the tests assert that
+  property, not a hardcoded outcome). Exit code 3 on proven non-equivalence,
+  matching `--verify`/`--proof`.
+- Public API: `find_witness`, `shrink_counterexample`, `Witness`,
+  `ShrinkResult`, exported from `daedalus`.
+- **Measurement caveat surfaced**: `equiv` compares pre-measurement
+  statevectors (the simulator's documented semantics), so when either input
+  contains a `measure` gate the report prints an explicit note and the JSON
+  gains `"measure_ignored": true`. Circuits that differ only in *what they
+  measure* are equivalent under this convention — the output now says so
+  instead of handing back an unqualified verdict.
+- Deterministic witness phase anchoring: the shared alignment phase anchors on
+  the lowest amplitude index within `1e-9` of the first input's peak
+  magnitude, so near-ties (e.g. the two `1/sqrt(2)` amplitudes of a GHZ state)
+  cannot let platform rounding decide which rows the witness displays.
+- Witness rows always include at least one visibly differing amplitude pair:
+  the row with the largest raw `|B - A|` is appended whenever the top
+  aligned-error rows would all show identical-looking amplitudes (a pure
+  relative-phase disagreement).
+
+### Fixed
+
+- Non-UTF-8 input files now produce the clean one-line `error: cannot read`
+  message and exit code 1 in every subcommand; previously a
+  `UnicodeDecodeError` traceback escaped because only `OSError` was caught.
+- The "no witness found" report no longer blames unsampled inputs
+  unconditionally. Near the tolerance boundary (within about a `2**(n/2)`
+  factor of `atol`) the exact engine's accumulated Frobenius norm can cross
+  `atol` while no single amplitude of any battery input does — demonstrated at
+  2 qubits by `rz(9.5e-10)` vs identity, where every basis state *is* sampled.
+  The message and the `find_witness` docstring now state both causes and defer
+  to the proof verdict.
+- A degenerate alignment factor (e.g. `B` vanishes at the anchor where `A`
+  peaks, making the ratio 0) is now labelled with its magnitude and the note
+  that it is not a pure phase, instead of printing `shared phase
+  +0.000000+0.000000j` without comment.
+
 ## [1.1.0] - 2026-07-30
 
 The "sabre" release: a second, smarter routing strategy — still proven correct
