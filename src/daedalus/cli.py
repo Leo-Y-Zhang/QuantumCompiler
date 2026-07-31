@@ -44,6 +44,11 @@ _DCE_WARNING = (
     "it runs after --verify and is excluded from the equivalence guarantee"
 )
 
+_MEASURE_NOTE = (
+    "note: measure gates are ignored - the verdict compares pre-measurement "
+    "statevectors, so circuits measuring different qubits can still be equivalent here"
+)
+
 
 def build_arg_parser() -> argparse.ArgumentParser:
     """Construct the top-level argument parser with both subcommands."""
@@ -144,6 +149,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "equiv",
         help="prove two circuits equivalent up to global phase; on failure "
         "emit a counterexample witness and a delta-debugged minimal form",
+        description="Prove two circuits equivalent up to global phase; on "
+        "failure emit a counterexample witness and a delta-debugged minimal "
+        "form. Measure gates are ignored: the comparison is between "
+        "pre-measurement statevectors, so two circuits that differ only in "
+        "what they measure are reported as equivalent (with a note).",
     )
     equiv_parser.add_argument(
         "file_a", help="first circuit (.qasm is parsed as OpenQASM 2.0, else DSL)"
@@ -169,10 +179,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
     if args.command == "equiv":
         return _run_equiv(args)
-    try:
-        source = Path(args.file).read_text(encoding="utf-8")
-    except OSError as exc:
-        print(f"error: cannot read '{args.file}': {exc.strerror or exc}", file=sys.stderr)
+    source = _read_source(args.file)
+    if source is None:
         return 1
     parser_fn = parse_qasm if args.file.lower().endswith(".qasm") else parse
     try:
@@ -187,6 +195,22 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "analyze":
         return _run_analyze(circuit, as_json=args.json)
     return _run_compile(args, circuit)
+
+
+def _read_source(path: str) -> str | None:
+    """Read a UTF-8 source file; print a clean error and return None on failure.
+
+    ``UnicodeDecodeError`` is caught alongside ``OSError`` so a binary or
+    wrongly-encoded input yields the same one-line message and exit code 1
+    instead of a traceback (it is a ``ValueError`` subclass, so it would
+    otherwise escape).
+    """
+    try:
+        return Path(path).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        reason = exc.strerror if isinstance(exc, OSError) and exc.strerror else exc
+        print(f"error: cannot read '{path}': {reason}", file=sys.stderr)
+        return None
 
 
 def _run_compile(args: argparse.Namespace, original: Circuit) -> int:
@@ -363,10 +387,8 @@ def _run_equiv(args: argparse.Namespace) -> int:
     """Prove file_a and file_b equivalent; witness + shrink on failure."""
     circuits: list[Circuit] = []
     for path in (args.file_a, args.file_b):
-        try:
-            source = Path(path).read_text(encoding="utf-8")
-        except OSError as exc:
-            print(f"error: cannot read '{path}': {exc.strerror or exc}", file=sys.stderr)
+        source = _read_source(path)
+        if source is None:
             return 1
         parser_fn = parse_qasm if path.lower().endswith(".qasm") else parse
         try:
@@ -375,6 +397,9 @@ def _run_equiv(args: argparse.Namespace) -> int:
             print(exc.format(path), file=sys.stderr)
             return 2
     a, b = circuits
+    measure_ignored = any(
+        gate.name == "measure" for circuit in circuits for gate in circuit.gates
+    )
     try:
         proof = prove_equivalence(a, b)
         witness = None if proof.equivalent else find_witness(a, b)
@@ -385,16 +410,22 @@ def _run_equiv(args: argparse.Namespace) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 2
     if args.json:
-        print(json.dumps(_equiv_json(proof, witness, shrink), indent=2))
+        print(json.dumps(_equiv_json(proof, witness, shrink, measure_ignored), indent=2))
     else:
-        _print_equiv_report(proof, witness, shrink)
+        _print_equiv_report(proof, witness, shrink, measure_ignored=measure_ignored)
     return 0 if proof.equivalent else 3
 
 
 def _print_equiv_report(
-    proof: ProofResult, witness: Witness | None, shrink: ShrinkResult | None
+    proof: ProofResult,
+    witness: Witness | None,
+    shrink: ShrinkResult | None,
+    *,
+    measure_ignored: bool,
 ) -> None:
     print(proof.summary())
+    if measure_ignored:
+        print(_MEASURE_NOTE)
     if proof.equivalent:
         return
     if proof.detail == "qubit counts differ":
@@ -402,8 +433,10 @@ def _print_equiv_report(
         return
     if witness is None:
         print(
-            "no witness found: every sampled battery input agrees "
-            "(the difference lies beyond the sampled inputs)"
+            "no witness found: every sampled battery input agrees to within "
+            "the per-amplitude tolerance (the difference is spread across the "
+            "full unitary below that tolerance, or lies beyond the sampled "
+            "inputs); the proof verdict above is the authority"
         )
     else:
         print(
@@ -411,9 +444,15 @@ def _print_equiv_report(
             f"(battery input {witness.input_index})"
         )
         print(
-            "  disagreeing amplitudes (error = |B - phase*A|, "
+            "  disagreeing amplitudes (error = |B - phase*A|, raw = |B - A|, "
             f"shared phase {_format_amplitude(witness.phase)}):"
         )
+        if abs(abs(witness.phase) - 1) > 1e-6:
+            print(
+                f"  (alignment factor magnitude {abs(witness.phase):.3f} - not a "
+                "pure phase, because B already differs from A at the anchor "
+                "amplitude; the raw column is the convention-free comparison)"
+            )
         for row in _witness_rows(witness):
             print(row)
     if shrink is not None:
@@ -432,13 +471,18 @@ def _print_equiv_report(
 
 
 def _witness_rows(witness: Witness) -> list[str]:
-    """Text rows for the worst disagreeing amplitudes, largest error first."""
+    """Text rows for the worst disagreeing amplitudes, largest error first.
+
+    Each row shows both the phase-aligned error and the raw ``|B - A|``
+    difference, so a relative-phase disagreement (aligned error large, raw
+    difference zero) is visibly distinct from an amplitude mismatch.
+    """
     num_qubits = len(witness.output_a).bit_length() - 1
     return [
         f"    {format_basis(index, num_qubits)}: "
         f"A {_format_amplitude(amp_a)}  B {_format_amplitude(amp_b)}  "
-        f"error {error:.3e}"
-        for error, index, amp_a, amp_b in _ranked_disagreements(witness)
+        f"error {error:.3e}  raw {raw:.3e}"
+        for error, raw, index, amp_a, amp_b in _ranked_disagreements(witness)
     ]
 
 
@@ -447,9 +491,16 @@ def _format_amplitude(amplitude: complex) -> str:
 
 
 def _equiv_json(
-    proof: ProofResult, witness: Witness | None, shrink: ShrinkResult | None
+    proof: ProofResult,
+    witness: Witness | None,
+    shrink: ShrinkResult | None,
+    measure_ignored: bool,
 ) -> dict[str, object]:
-    """Strict-JSON view of the verdict (non-finite errors become null)."""
+    """Strict-JSON view of the verdict (non-finite errors become null).
+
+    ``measure_ignored`` is true when either input contains a measure gate,
+    flagging that the verdict compares pre-measurement statevectors only.
+    """
     num_qubits = len(witness.output_a).bit_length() - 1 if witness else 0
     witness_data: dict[str, object] | None = None
     if witness is not None:
@@ -465,8 +516,9 @@ def _equiv_json(
                     "a": [amp_a.real, amp_a.imag],
                     "b": [amp_b.real, amp_b.imag],
                     "error": error,
+                    "raw_error": raw,
                 }
-                for error, index, amp_a, amp_b in _ranked_disagreements(witness)
+                for error, raw, index, amp_a, amp_b in _ranked_disagreements(witness)
             ],
         }
     shrink_data: dict[str, object] | None = None
@@ -484,6 +536,7 @@ def _equiv_json(
         "max_error": proof.max_error if math.isfinite(proof.max_error) else None,
         "process_fidelity": proof.process_fidelity,
         "detail": proof.detail,
+        "measure_ignored": measure_ignored,
         "witness": witness_data,
         "shrink": shrink_data,
     }
@@ -491,22 +544,30 @@ def _equiv_json(
 
 def _ranked_disagreements(
     witness: Witness, limit: int = 4
-) -> list[tuple[float, int, complex, complex]]:
-    """The *limit* worst (error, index, amp A, amp B) rows of a witness.
+) -> list[tuple[float, float, int, complex, complex]]:
+    """The *limit* worst (error, raw, index, amp A, amp B) rows of a witness.
 
-    Errors use the witness's shared alignment phase; ties break on the lower
-    amplitude index so the ordering is deterministic.
+    Errors use the witness's shared alignment phase; ``raw`` is the unaligned
+    ``|B - A|``. Rows are ranked by aligned error (ties break on the lower
+    amplitude index so the ordering is deterministic). When the amplitude pair
+    with the largest raw difference is not already among the rows it is
+    appended, so the display never consists solely of rows whose printed
+    amplitudes look identical while a visibly differing pair goes unshown.
     """
     ranked = sorted(
         (
-            (abs(bb - witness.phase * aa), index, aa, bb)
+            (abs(bb - witness.phase * aa), abs(bb - aa), index, aa, bb)
             for index, (aa, bb) in enumerate(
                 zip(witness.output_a, witness.output_b, strict=True)
             )
         ),
-        key=lambda item: (-item[0], item[1]),
+        key=lambda item: (-item[0], item[2]),
     )
-    return [row for row in ranked[:limit] if row[0] > DEFAULT_ATOL]
+    rows = [row for row in ranked[:limit] if row[0] > DEFAULT_ATOL]
+    raw_worst = max(ranked, key=lambda item: (item[1], -item[2]))
+    if raw_worst[1] > DEFAULT_ATOL and all(row[2] != raw_worst[2] for row in rows):
+        rows.append(raw_worst)
+    return rows
 
 
 def _gate_lines(circuit: Circuit) -> list[str]:

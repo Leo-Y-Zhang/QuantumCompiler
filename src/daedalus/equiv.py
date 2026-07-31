@@ -13,10 +13,18 @@ gates as possible.
 Phase convention
 ----------------
 A witness is only meaningful relative to a phase convention, because circuits
-are compared up to one global phase. This module reuses the oracle's
-convention exactly: the phase is fixed once from the first battery input, and
-every reported error is ``|B(x) - phase * A(x)|`` under that single shared
-phase (see :mod:`daedalus.verify` for why a per-input phase would be unsound).
+are compared up to one global phase. This module uses the oracle's convention:
+the phase is fixed once from the first battery input, and every reported error
+is ``|B(x) - phase * A(x)|`` under that single shared phase (see
+:mod:`daedalus.verify` for why a per-input phase would be unsound). One
+refinement for reproducibility: the anchor amplitude is the *lowest* index
+whose magnitude is within ``1e-9`` of the first input's peak, so near-ties
+(e.g. the two 1/sqrt(2) amplitudes of a GHZ state) do not let platform
+rounding pick the anchor. For genuinely equivalent circuits every near-peak
+anchor yields the same phase, so this never changes a verdict. For circuits
+that *disagree* the anchor ratio need not have magnitude 1 — B can even vanish
+where A peaks, making the factor 0; the CLI labels such factors explicitly
+instead of presenting a magnitude-0 number as a phase.
 
 Minimality
 ----------
@@ -98,9 +106,13 @@ def find_witness(
 
     Returns the first battery input whose phase-aligned error exceeds *atol* —
     basis states come first in the battery, so witnesses come out as simple as
-    possible — or ``None`` when every battery input agrees. For circuits of
-    more than 3 qubits a ``None`` only means the sampled battery missed the
-    difference; the exact-unitary verdict is the authority on equivalence.
+    possible — or ``None`` when every battery input agrees to within *atol*.
+    A ``None`` alongside a negative verdict does not contradict the oracle.
+    Above 3 qubits the sampled battery can simply miss the difference; and at
+    *any* size the exact engine accumulates a Frobenius norm over the whole
+    unitary, which can cross *atol* even though no single amplitude of any one
+    input does (only reachable within about a ``2**(n/2)`` factor of *atol*).
+    Either way the exact-unitary verdict is the authority on equivalence.
     """
     if a.num_qubits != b.num_qubits:
         return None
@@ -110,8 +122,10 @@ def find_witness(
         output_a = simulate(a, initial=state)
         output_b = simulate(b, initial=state)
         if phase is None:
-            k = max(range(len(output_a)), key=lambda i: abs(output_a[i]))
-            phase = output_b[k] / output_a[k]
+            magnitudes = [abs(amp) for amp in output_a]
+            peak = max(magnitudes)
+            anchor = next(i for i, mag in enumerate(magnitudes) if mag >= peak - 1e-9)
+            phase = output_b[anchor] / output_a[anchor]
         errors = [
             abs(bb - phase * aa) for aa, bb in zip(output_a, output_b, strict=True)
         ]
