@@ -4,10 +4,10 @@ import math
 
 import pytest
 
-from daedalus.parser import parse
-from daedalus.passes.commute_cancel import CommuteCancel
-from daedalus.unitary import prove_circuit_equivalence
-from daedalus.verify import check_equivalence
+from quantum_compiler.parser import parse
+from quantum_compiler.passes.commute_cancel import CommuteCancel
+from quantum_compiler.unitary import prove_circuit_equivalence
+from quantum_compiler.verify import check_equivalence
 
 PASS = CommuteCancel()
 

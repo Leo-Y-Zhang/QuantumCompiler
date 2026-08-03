@@ -9,9 +9,9 @@ import math
 
 import pytest
 
-from daedalus.parser import parse
-from daedalus.passes.peephole import Peephole
-from daedalus.verify import check_equivalence
+from quantum_compiler.parser import parse
+from quantum_compiler.passes.peephole import Peephole
+from quantum_compiler.verify import check_equivalence
 
 PASS = Peephole()
 

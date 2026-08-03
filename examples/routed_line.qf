@@ -1,6 +1,6 @@
 # A circuit with long-range two-qubit gates, used to demo verified routing.
 # On a linear coupling map 0-1-2-3 the q0-q3 and q1-q3 gates are not physically
-# adjacent, so `daedalus route routed_line.qf --coupling line --verify` inserts
+# adjacent, so `quantum-compiler route routed_line.qf --coupling line --verify` inserts
 # SWAPs and proves the result equivalent up to the final qubit layout.
 qubits 4
 bits 1

@@ -11,12 +11,12 @@ from pathlib import Path
 
 import pytest
 
-from daedalus.ir import Circuit, Gate
-from daedalus.parser import parse
-from daedalus.route import route
-from daedalus.topology import CouplingMap
-from daedalus.unitary import circuit_unitary, compare_unitaries
-from daedalus.verify import _permute_embed, check_routing_equivalence
+from quantum_compiler.ir import Circuit, Gate
+from quantum_compiler.parser import parse
+from quantum_compiler.route import route
+from quantum_compiler.topology import CouplingMap
+from quantum_compiler.unitary import circuit_unitary, compare_unitaries
+from quantum_compiler.verify import _permute_embed, check_routing_equivalence
 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
 

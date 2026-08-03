@@ -1,23 +1,24 @@
-# Daedalus — a toy quantum-circuit compiler whose optimizations are proven correct by simulation
+# QuantumCompiler — a toy quantum-circuit compiler whose optimizations are proven correct by simulation
 
-[![CI](https://github.com/GreenPandaTech/Daedalus/actions/workflows/ci.yml/badge.svg)](https://github.com/GreenPandaTech/Daedalus/actions/workflows/ci.yml)
+[![CI](https://github.com/GreenPandaTech/QuantumCompiler/actions/workflows/ci.yml/badge.svg)](https://github.com/GreenPandaTech/QuantumCompiler/actions/workflows/ci.yml)
 
-*Daedalus — the master craftsman who built the Labyrinth; this one crafts
-quantum circuits and proves its rewrites never lose the way.*
+*A small compiler for quantum circuits: it parses a circuit DSL, rewrites the
+circuit to be cheaper, and then proves the rewrite did not change what the
+circuit computes.*
 
 **A toy educational quantum-circuit DSL compiler with *verified* optimization,
 an *exact* unitary proof mode, a *verified* SWAP-insertion router, and a
 standalone two-circuit equivalence prover with delta-debugged counterexamples.
 Pure Python stdlib — zero runtime dependencies.**
 
-Daedalus compiles a small quantum-circuit DSL through a real compiler pipeline
-(lexer → recursive-descent parser → IR → pass manager), *proves* its
+QuantumCompiler compiles a small quantum-circuit DSL through a real compiler
+pipeline (lexer → recursive-descent parser → IR → pass manager), *proves* its
 optimizations did not change the circuit's meaning, and can then route it onto a
 hardware coupling map — proving *that* correct too. The spine of the whole
 project is one idea: **nothing is trusted that the equivalence oracle cannot
 certify.** Even the [routing benchmark](#benchmark-sabre-vs-greedy-on-the-examples)
-below is the verbatim output of `python -m daedalus.bench`, including the rows
-where the smarter router does not win.
+below is the verbatim output of `python -m quantum_compiler.bench`, including the
+rows where the smarter router does not win.
 
 > **Honest framing:** this is a teaching compiler for learning and portfolio
 > purposes. It has a real compiler architecture, simulation-verified rewrites,
@@ -27,8 +28,8 @@ where the smarter router does not win.
 
 ## Why it is interesting
 
-Most toy compilers *claim* their optimizations are correct. Daedalus checks two
-ways:
+Most toy compilers *claim* their optimizations are correct. QuantumCompiler
+checks two ways:
 
 - **Randomized** — every optimized circuit is re-simulated against the original
   on a deterministic battery of basis states and seeded pseudo-random inputs,
@@ -38,7 +39,7 @@ ways:
   fidelity. This is a genuine proof, not evidence.
 
 ```
-$ daedalus compile examples/rotations.qf --opt --proof --emit ascii
+$ quantum-compiler compile examples/rotations.qf --opt --proof --emit ascii
 proof: exact unitary check, equivalent up to global phase (diff norm 3.140e-16, process fidelity 1.0000000000, dimension 4)
 BEFORE:
 q0: -[RZ(pi/4)]--[RZ(pi/4)]---o---[RZ(-pi/2)]-----------------------
@@ -98,7 +99,7 @@ The pass manager runs passes to a fixpoint and reports per-pass statistics plus
 depth:
 
 ```
-$ daedalus stats examples/clifford_t.qf
+$ quantum-compiler stats examples/clifford_t.qf
 pass               iter  before  after  removed
 cancel-inverses       1       7      5        2
 merge-rotations       1       5      5        0
@@ -114,14 +115,14 @@ across it. Every pass is tested to fire without a fence and to be blocked by one
 
 ## Verified routing onto a coupling map
 
-Real hardware only allows two-qubit gates between *coupled* qubits. Daedalus can
-route a logical circuit onto a coupling map — `line`, `ring`, `grid`, `full`, or
-a custom edge list — by inserting SWAPs, and then **prove** the routed circuit
-reproduces the original *up to the qubit permutation the SWAPs induce*. Two
-strategies are shipped (`--strategy greedy|sabre`, greedy is the default):
+Real hardware only allows two-qubit gates between *coupled* qubits.
+QuantumCompiler can route a logical circuit onto a coupling map — `line`,
+`ring`, `grid`, `full`, or a custom edge list — by inserting SWAPs, and then
+**prove** the routed circuit reproduces the original *up to the qubit
+permutation the SWAPs induce*. Two strategies are shipped (`--strategy greedy|sabre`, greedy is the default):
 
 ```
-$ daedalus route examples/routed_line.qf --coupling line --verify --emit ascii
+$ quantum-compiler route examples/routed_line.qf --coupling line --verify --emit ascii
 routed onto a 4-qubit coupling map: 4 swap(s) added, depth 5 -> 8
 final layout (logical -> physical): [1, 2, 0, 3]
 verify: routed circuit equivalent up to the final layout (max error 0.000e+00, 10 inputs)
@@ -137,7 +138,8 @@ q3: ------------(+)------o---[T]--[M->c0]-
 The default router is a deliberately simple greedy one (trivial initial layout,
 no lookahead) — but it is *verified*: `check_routing_equivalence` embeds each
 input under the initial layout, simulates the routed circuit, and compares the
-output read back through the final layout, exact for small circuits. That is
+output read back through the final layout — over *every* basis state up to 3
+qubits (which, under a single shared phase, settles it), sampled above. That is
 the whole point: routing is only trustworthy because it is proven. With
 `--verify` the router cannot silently ship a wrong circuit: a failed oracle
 check refuses to emit anything and exits with code 3, and the test suite proves
@@ -158,7 +160,7 @@ on the smallest candidate edge — and a greedy shortest-path fallback fires if
 the heuristic stalls, so routing always terminates.
 
 ```
-$ daedalus route examples/routed_line.qf --coupling line --strategy sabre --verify
+$ quantum-compiler route examples/routed_line.qf --coupling line --strategy sabre --verify
 routed onto a 4-qubit coupling map: 1 swap(s) added, depth 5 -> 6
 initial layout (logical -> physical): [2, 1, 0, 3]
 final layout (logical -> physical): [1, 2, 0, 3]
@@ -176,8 +178,8 @@ proven equivalent this way across all five topologies.
 ### Benchmark: sabre vs greedy on the examples
 
 Measured on the committed example circuits (regenerate with
-`python -m daedalus.bench`; the table below is that command's verbatim output).
-`swaps` = SWAP gates inserted; `depth` = routed depth minus the original
+`python -m quantum_compiler.bench`; the table below is that command's verbatim
+output). `swaps` = SWAP gates inserted; `depth` = routed depth minus the original
 circuit's depth, using the repo's span-blocking moment metric.
 
 | circuit | topology | swaps greedy | swaps sabre | depth greedy | depth sabre |
@@ -222,16 +224,16 @@ and **greedy ends 2 moments shallower** than sabre (depth −1 vs +1) — the
 depth metric is span-blocking, so sabre's non-trivial placement can cost
 diagram moments even at equal swap count.
 
-## Any two circuits: `daedalus equiv`
+## Any two circuits: `quantum-compiler equiv`
 
 The oracle that certifies the optimizer and the router is also exposed
-directly: `daedalus equiv A B` proves *any* two circuits (DSL or QASM, mixed
-freely) equivalent up to global phase — exact unitary up to 7 qubits, the
+directly: `quantum-compiler equiv A B` proves *any* two circuits (DSL or QASM,
+mixed freely) equivalent up to global phase — exact unitary up to 7 qubits, the
 randomized battery above that. Comparing a circuit against its optimized form:
 
 ```
-$ daedalus compile examples/bell.qf --opt --emit ir --out bell_opt.qf
-$ daedalus equiv examples/bell.qf bell_opt.qf
+$ quantum-compiler compile examples/bell.qf --opt --emit ir --out bell_opt.qf
+$ quantum-compiler equiv examples/bell.qf bell_opt.qf
 proof: exact unitary check, equivalent up to global phase (diff norm 0.000e+00, process fidelity 1.0000000000, dimension 4)
 note: measure gates are ignored - the verdict compares pre-measurement statevectors, so circuits measuring different qubits can still be equivalent here
 ```
@@ -250,7 +252,7 @@ algorithm (Zeller & Hildebrandt 2002) over the union of both gate lists. Here
 `a.qf` and `b.qf` are a Bell preparation ending in `t q1` vs `tdg q1`:
 
 ```
-$ daedalus equiv a.qf b.qf
+$ quantum-compiler equiv a.qf b.qf
 proof: exact unitary check, NOT equivalent (diff norm 2.000e+00, process fidelity 0.7071067812, dimension 4)
 counterexample witness: input |00> (battery input 0)
   disagreeing amplitudes (error = |B - phase*A|, raw = |B - A|, shared phase +1.000000+0.000000j):
@@ -276,7 +278,7 @@ with code 3, same as `--verify`/`--proof` refusals.
 ## Resource analysis and the dependency DAG
 
 ```
-$ daedalus analyze examples/qft3.qf
+$ quantum-compiler analyze examples/qft3.qf
 qubits: 3    bits: 0
 operations: 19
 depth: 16
@@ -291,11 +293,11 @@ gate histogram:
 `analyze` reports depth, gate mix, two-qubit count, and **T-count** (the
 dominant cost metric in fault-tolerant quantum computing); `--json` emits the
 same numbers as JSON. `--emit dot` writes the IR's per-wire dependency DAG as
-Graphviz (`daedalus compile FILE --emit dot | dot -Tsvg -o dag.svg`), making the
-"the IR is effectively a DAG" claim literal.
+Graphviz (`quantum-compiler compile FILE --emit dot | dot -Tsvg -o dag.svg`),
+making the "the IR is effectively a DAG" claim literal.
 
 SVG diagrams (committed under `examples/`, regenerable with
-`daedalus compile … --emit svg --out …`):
+`quantum-compiler compile … --emit svg --out …`):
 
 | before | after `--opt` |
 |---|---|
@@ -337,14 +339,14 @@ python -m venv .venv
 .venv/Scripts/python.exe -m mypy src                   # strict types
 ```
 
-CLI (also runnable as `python -m daedalus`):
+CLI (also runnable as `python -m quantum_compiler`):
 
 ```
-daedalus compile FILE [--opt] [--emit ir|ascii|svg|qasm|dot] [--verify] [--proof] [--dce] [--out FILE]
-daedalus route   FILE --coupling line|ring|full[:N]|grid:RxC [--strategy greedy|sabre] [--emit …] [--verify] [--out FILE]
-daedalus equiv   FILE_A FILE_B [--no-shrink] [--json]
-daedalus analyze FILE [--json]
-daedalus stats   FILE [--dce]
+quantum-compiler compile FILE [--opt] [--emit ir|ascii|svg|qasm|dot] [--verify] [--proof] [--dce] [--out FILE]
+quantum-compiler route   FILE --coupling line|ring|full[:N]|grid:RxC [--strategy greedy|sabre] [--emit …] [--verify] [--out FILE]
+quantum-compiler equiv   FILE_A FILE_B [--no-shrink] [--json]
+quantum-compiler analyze FILE [--json]
+quantum-compiler stats   FILE [--dce]
 ```
 
 Files ending in `.qasm` are parsed as OpenQASM 2.0; everything else as the DSL.
@@ -355,7 +357,7 @@ equivalent).
 ## Architecture
 
 ```
-src/daedalus/
+src/quantum_compiler/
   lexer.py       tokenizer with line/column tracking
   parser.py      recursive-descent parser -> Circuit IR
   angles.py      safe pi-arithmetic expression evaluator (no eval)
@@ -381,6 +383,23 @@ tests/           493 pytest tests: parser errors by position, every pass, hand-
                  every ddmin shrink, SVG/DOT well-formedness, QASM roundtrips,
                  CLI e2e
 ```
+
+## Design documents
+
+Written retrospectively from the shipped code, not from this README:
+
+- [`docs/PRD.md`](docs/PRD.md) — the problem, who it is for, what is
+  deliberately out of scope, and the alternatives that were rejected (and why
+  a per-input global phase would have been unsound).
+- [`docs/TDD.md`](docs/TDD.md) — data model, public API contracts, exit codes,
+  failure modes, and the one trust boundary this project has.
+- [`docs/DESIGN_BRIEF.md`](docs/DESIGN_BRIEF.md) — the diagram notation:
+  symbol vocabulary, the span-blocking layout and what it costs, contrast
+  values, and what the SVG does not do.
+
+There is no App Flow document: this is a non-interactive one-shot CLI with no
+screens or sessions, and the exit-code table in the TDD is its whole state
+model.
 
 ## Safety & privacy
 

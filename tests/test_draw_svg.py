@@ -2,8 +2,8 @@
 
 import xml.etree.ElementTree as ET
 
-from daedalus.draw_svg import render_svg
-from daedalus.parser import parse
+from quantum_compiler.draw_svg import render_svg
+from quantum_compiler.parser import parse
 
 SVG_NS = "{http://www.w3.org/2000/svg}"
 

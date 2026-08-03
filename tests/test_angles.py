@@ -4,8 +4,8 @@ import math
 
 import pytest
 
-from daedalus.angles import evaluate, format_angle
-from daedalus.errors import DaedalusError, ParseError
+from quantum_compiler.angles import evaluate, format_angle
+from quantum_compiler.errors import ParseError, QuantumCompilerError
 
 
 class TestEvaluate:
@@ -73,7 +73,7 @@ class TestEvaluateErrors:
 
     def test_no_eval_of_python(self) -> None:
         # Quotes are not even lexable; identifiers are rejected by the parser.
-        with pytest.raises(DaedalusError):
+        with pytest.raises(QuantumCompilerError):
             evaluate("__import__('os')")
         with pytest.raises(ParseError, match="unknown identifier"):
             evaluate("__import__")

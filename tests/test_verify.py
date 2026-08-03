@@ -1,7 +1,7 @@
 """Equivalence-checker tests: equal circuits, unequal circuits, phase traps."""
 
-from daedalus.parser import parse
-from daedalus.verify import check_equivalence, check_routing_equivalence, prove_equivalence
+from quantum_compiler.parser import parse
+from quantum_compiler.verify import check_equivalence, check_routing_equivalence, prove_equivalence
 
 
 class TestEquivalent:

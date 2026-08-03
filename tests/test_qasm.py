@@ -5,12 +5,12 @@ from pathlib import Path
 
 import pytest
 
-from daedalus.errors import ParseError
-from daedalus.ir import Circuit, Gate
-from daedalus.parser import parse
-from daedalus.passes import PassManager, default_passes
-from daedalus.qasm import emit_qasm, parse_qasm
-from daedalus.verify import check_equivalence
+from quantum_compiler.errors import ParseError
+from quantum_compiler.ir import Circuit, Gate
+from quantum_compiler.parser import parse
+from quantum_compiler.passes import PassManager, default_passes
+from quantum_compiler.qasm import emit_qasm, parse_qasm
+from quantum_compiler.verify import check_equivalence
 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
 

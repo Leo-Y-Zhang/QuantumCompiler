@@ -3,6 +3,34 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Changed
+
+- **Project renamed `Daedalus` → `QuantumCompiler`** (2026-08-03). No compiler
+  behaviour changed; only names did. The mapping:
+
+  | was | is |
+  |---|---|
+  | GitHub repo `GreenPandaTech/Daedalus` | `GreenPandaTech/QuantumCompiler` |
+  | distribution name `daedalus` | `quantum-compiler` |
+  | import package `daedalus` | `quantum_compiler` |
+  | console script `daedalus …` | `quantum-compiler …` |
+  | `python -m daedalus` | `python -m quantum_compiler` |
+  | exception base `DaedalusError` | `QuantumCompilerError` |
+
+  **Existing checkouts must re-run `pip install -e ".[dev]"`.** The old editable
+  install points at `src/daedalus`, which no longer exists, so every import
+  fails until it is reinstalled.
+
+  The release entries below are left exactly as they were written at the time,
+  so they still say `daedalus`. Read them through the table above.
+
+### Added
+
+- `docs/PRD.md` and `docs/TDD.md`: retrospective product and technical design
+  documents derived from the shipped code.
+
 ## [1.2.0] - 2026-07-31
 
 The "equiv" release: the equivalence oracle becomes a standalone two-circuit

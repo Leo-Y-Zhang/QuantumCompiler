@@ -2,8 +2,8 @@
 
 import pytest
 
-from daedalus.errors import LexError
-from daedalus.lexer import Token, tokenize
+from quantum_compiler.errors import LexError
+from quantum_compiler.lexer import Token, tokenize
 
 
 def kinds(tokens: list[Token]) -> list[str]:

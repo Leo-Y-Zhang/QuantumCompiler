@@ -2,7 +2,7 @@
 
 import pytest
 
-from daedalus.topology import CouplingMap
+from quantum_compiler.topology import CouplingMap
 
 
 class TestConstructors:

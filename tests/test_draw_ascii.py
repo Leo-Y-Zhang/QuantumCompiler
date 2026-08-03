@@ -1,7 +1,7 @@
 """Tests for the ASCII circuit renderer."""
 
-from daedalus.draw_ascii import render_ascii
-from daedalus.parser import parse
+from quantum_compiler.draw_ascii import render_ascii
+from quantum_compiler.parser import parse
 
 
 class TestRendering:

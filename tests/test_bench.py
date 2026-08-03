@@ -1,9 +1,9 @@
 """Benchmark table tests: real numbers, deterministic output, honest columns."""
 
-from daedalus import bench
-from daedalus.parser import parse
-from daedalus.route import route
-from daedalus.topology import CouplingMap
+from quantum_compiler import bench
+from quantum_compiler.parser import parse
+from quantum_compiler.route import route
+from quantum_compiler.topology import CouplingMap
 
 
 class TestBenchmarkTable:

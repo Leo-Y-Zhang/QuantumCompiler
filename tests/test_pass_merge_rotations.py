@@ -4,9 +4,9 @@ import math
 
 import pytest
 
-from daedalus.parser import parse
-from daedalus.passes.merge_rotations import MergeRotations
-from daedalus.verify import check_equivalence
+from quantum_compiler.parser import parse
+from quantum_compiler.passes.merge_rotations import MergeRotations
+from quantum_compiler.verify import check_equivalence
 
 PASS = MergeRotations()
 

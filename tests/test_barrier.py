@@ -7,12 +7,12 @@ fenced by a barrier that must stay un-optimized.
 
 import pytest
 
-from daedalus.ir import Gate, dump
-from daedalus.parser import parse
-from daedalus.passes import PassManager, default_passes
-from daedalus.qasm import emit_qasm, parse_qasm
-from daedalus.sim import simulate
-from daedalus.verify import check_equivalence
+from quantum_compiler.ir import Gate, dump
+from quantum_compiler.parser import parse
+from quantum_compiler.passes import PassManager, default_passes
+from quantum_compiler.qasm import emit_qasm, parse_qasm
+from quantum_compiler.sim import simulate
+from quantum_compiler.verify import check_equivalence
 
 
 def names(circuit):
