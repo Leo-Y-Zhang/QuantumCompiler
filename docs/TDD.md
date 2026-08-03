@@ -166,44 +166,7 @@ hostile input file cannot ask for a `2⁶⁴` allocation. It *can* still ask for
 10-qubit circuit with a million gates and be slow. For a local developer tool
 that is accepted.
 
-## Failure modes
-
-| What breaks | Who notices | How we detect it | How we undo it |
-|---|---|---|---|
-| A pass changes circuit semantics | the user, at `--verify`/`--proof` | the oracle: exact unitary ≤ 7 qubits, sampled battery above | **the compiler refuses to emit** and exits `3`; nothing wrong is written. The per-pass tests in `tests/test_pass_*.py` catch it before release |
-| Routing permutes qubits wrongly | same | `check_routing_equivalence` with both layouts | exit `3`, nothing emitted |
-| Sabre layout passed to the oracle without `initial_layout` | nobody — it silently compares the wrong pair | not detectable at runtime; only by reading the call site | the routers return `initial_layout` in `RoutingResult`; `tests/test_route.py` exercises both strategies on all five topologies |
-| Pass manager fails to reach a fixpoint | the user, as a crash | `max_iterations = 1000` defensive bound | `RuntimeError("pass manager failed to reach a fixpoint")`. Termination is argued in the module docstring by a lexicographic measure `(len(gates), #special-angle rotations)`; the bound exists in case that argument is wrong |
-| Circuit too large to simulate | the user | `simulate` / `circuit_unitary` size checks | `ValueError` naming the cap (10 / 7 qubits) |
-| Circuit needs more qubits than the coupling map | the user | `route` precondition | `ValueError` naming both counts |
-| Unparseable source | the user | lexer/parser | `file:line:col: error: …` on stderr, exit `2` |
-| Binary or non-UTF-8 input file | the user | `_read_source` catches `UnicodeDecodeError` with `OSError` | one clean message, exit `1`, no traceback |
-| Two circuits genuinely inequivalent under `equiv` | the user | the oracle | exit `3`, plus a counterexample witness and a ddmin-shrunk 1-minimal pair explaining *why* |
-
-There is no monitoring and no alerting, because there is no deployment. The
-only detectors are CI — `pytest`, `ruff check .`, `mypy src` strict, gitleaks,
-all with 15-minute timeouts — and the user's own exit code.
-
-## Rollback
-
-Nothing this project does is irreversible. It writes exactly one artefact, to
-stdout or to `--out`, and only after every requested check has passed.
-
-A bad release is `git revert` plus `pip install -e ".[dev]"`: no state to
-migrate back, no cache to invalidate, no client left out of step. A bad emitted
-circuit costs nothing either — the input file is untouched, so delete the
-output.
-
-The 2026-08-03 rename is the only change with a blast radius beyond this repo,
-and even that is a pure rename of the distribution, the import package, the
-console script and one exception class. Undoing it is a `git revert` of that
-commit plus a reinstall. The non-obvious consequence, and the reason the
-CHANGELOG states it in bold, is that an **existing editable install keeps
-pointing at `src/daedalus`, which no longer exists**, so every import fails
-until `pip install -e ".[dev]"` is run again. That is the whole cost, and it is
-local to each checkout.
-
-## Test plan
+## What the tests are shaped to catch
 
 493 tests, `pytest -q`, about two seconds. The structure is the point.
 
@@ -239,7 +202,44 @@ back, and is re-proven equivalent.
 **CLI end to end**, including a real subprocess run of
 `python -m quantum_compiler` and its exit codes.
 
-## Build order
+## Where it breaks, and what the break costs
+
+| What breaks | Who notices | How we detect it | How we undo it |
+|---|---|---|---|
+| A pass changes circuit semantics | the user, at `--verify`/`--proof` | the oracle: exact unitary ≤ 7 qubits, sampled battery above | **the compiler refuses to emit** and exits `3`; nothing wrong is written. The per-pass tests in `tests/test_pass_*.py` catch it before release |
+| Routing permutes qubits wrongly | same | `check_routing_equivalence` with both layouts | exit `3`, nothing emitted |
+| Sabre layout passed to the oracle without `initial_layout` | nobody — it silently compares the wrong pair | not detectable at runtime; only by reading the call site | the routers return `initial_layout` in `RoutingResult`; `tests/test_route.py` exercises both strategies on all five topologies |
+| Pass manager fails to reach a fixpoint | the user, as a crash | `max_iterations = 1000` defensive bound | `RuntimeError("pass manager failed to reach a fixpoint")`. Termination is argued in the module docstring by a lexicographic measure `(len(gates), #special-angle rotations)`; the bound exists in case that argument is wrong |
+| Circuit too large to simulate | the user | `simulate` / `circuit_unitary` size checks | `ValueError` naming the cap (10 / 7 qubits) |
+| Circuit needs more qubits than the coupling map | the user | `route` precondition | `ValueError` naming both counts |
+| Unparseable source | the user | lexer/parser | `file:line:col: error: …` on stderr, exit `2` |
+| Binary or non-UTF-8 input file | the user | `_read_source` catches `UnicodeDecodeError` with `OSError` | one clean message, exit `1`, no traceback |
+| Two circuits genuinely inequivalent under `equiv` | the user | the oracle | exit `3`, plus a counterexample witness and a ddmin-shrunk 1-minimal pair explaining *why* |
+
+There is no monitoring and no alerting, because there is no deployment. The
+only detectors are CI — `pytest`, `ruff check .`, `mypy src` strict, gitleaks,
+all with 15-minute timeouts — and the user's own exit code.
+
+## Undo, and the one change with reach beyond this repo
+
+Nothing this project does is irreversible. It writes exactly one artefact, to
+stdout or to `--out`, and only after every requested check has passed.
+
+A bad release is `git revert` plus `pip install -e ".[dev]"`: no state to
+migrate back, no cache to invalidate, no client left out of step. A bad emitted
+circuit costs nothing either — the input file is untouched, so delete the
+output.
+
+The 2026-08-03 rename is the only change with a blast radius beyond this repo,
+and even that is a pure rename of the distribution, the import package, the
+console script and one exception class. Undoing it is a `git revert` of that
+commit plus a reinstall. The non-obvious consequence, and the reason the
+CHANGELOG states it in bold, is that an **existing editable install keeps
+pointing at `src/daedalus`, which no longer exists**, so every import fails
+until `pip install -e ".[dev]"` is run again. That is the whole cost, and it is
+local to each checkout.
+
+## The order it was built in, and what stayed unstarted
 
 Steps 0–8 of `docs/superpowers/specs/to-the-max.md`, all complete on
 2026-07-09; then v1.1.0 sabre routing on 2026-07-30 and v1.2.0 `equiv` on
