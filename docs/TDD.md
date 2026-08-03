@@ -241,9 +241,9 @@ local to each checkout.
 
 ## The order it was built in, and what stayed unstarted
 
-Steps 0–8 of `docs/superpowers/specs/to-the-max.md`, all complete on
-2026-07-09; then v1.1.0 sabre routing on 2026-07-30 and v1.2.0 `equiv` on
-2026-07-31. `SESSION_HANDOFF.md` has the detail.
+The nine planned build steps were finished on 2026-07-09; then v1.1.0 sabre
+routing on 2026-07-30 and v1.2.0 `equiv` on 2026-07-31. The commit history is
+the record.
 
 Nothing is an open design question. The README's Roadmap items — the full SABRE
 decay factor and multiple reverse-traversal rounds, directed coupling maps,
