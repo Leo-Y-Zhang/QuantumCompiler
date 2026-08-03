@@ -1,32 +1,27 @@
-# TDD — QuantumCompiler
+# QuantumCompiler: how it is built
 
-**Status:** built (written retrospectively from the v1.2.0 code) ·
-**Date:** 2026-08-03 · **PRD:** [PRD.md](PRD.md) ·
-**Repo:** GreenPandaTech/QuantumCompiler
+Read out of `src/quantum_compiler/` at v1.2.0, not out of the README. Where the
+two disagreed the code won and the README was corrected in the same commit.
+Requirements: [PRD.md](PRD.md).
 
-> Derived by reading `src/quantum_compiler/`, not the README. Where the two
-> disagree, this document follows the code and the README is corrected in the
-> same commit.
+## The pipeline, and the oracle bolted across it
 
-## Approach
+Ordinary compiler shape, single process, no dependencies:
+`lexer → recursive-descent parser → IR → pass manager → backend`.
 
-A single-process, dependency-free Python package with the shape of a real
-compiler: `lexer → recursive-descent parser → IR → pass manager → backend`.
-The distinctive part is not the pipeline but the oracle bolted across it. A
-*statevector simulator* built on plain Python `complex` lists gives the IR a
-computable denotation, and everything that rewrites a circuit is required to
-prove it did not change that denotation — the optimizer, the router, and, via
-the `equiv` subcommand, any two circuits a user hands in. Verification is a
-gate, not a report: when a check fails the CLI emits nothing and exits `3`.
+The distinctive part is not the pipeline. It is that a *statevector simulator*,
+built on plain Python `complex` lists, gives the IR a computable denotation,
+and everything that rewrites a circuit is required to prove it did not change
+that denotation — the optimizer, the router, and, through the `equiv`
+subcommand, any two circuits a user hands in. Verification is a gate rather
+than a report: when a check fails the CLI emits nothing and exits `3`.
 
-There is no server, no database, no persistent state and no network access.
-The whole system is "argv and stdin/stdout plus files named on the command
-line", which is why several sections of the standard template collapse to a
-single honest sentence below rather than being padded out.
+No server, no database, no persistent state, no network access. The whole
+system is argv, stdin/stdout, and files named on the command line.
 
-## Data model
+## The IR
 
-No database. The entire model is two frozen/plain dataclasses in `ir.py`:
+No database. The entire model is two dataclasses in `ir.py`:
 
 | Type | Field | Type | Meaning / constraints |
 |---|---|---|---|
@@ -38,28 +33,61 @@ No database. The entire model is two frozen/plain dataclasses in `ir.py`:
 | | `num_bits` | `int` | classical register size; `0` is legal |
 | | `gates` | `list[Gate]` | program order |
 
-Two invariants carry the design:
+Two invariants carry the design.
 
-1. **The flat gate list is one topological order of a DAG, not the semantics.**
-   Two gates must keep their relative order iff they share a qubit; gates on
-   disjoint qubits commute trivially as tensor factors. Passes are therefore
-   written against `Circuit.qubit_wires()` (per qubit, the indices of the gates
-   touching it, in order) rather than against list adjacency. This is what makes
-   `commute-cancel` and the router's dependency front layer expressible at all.
-2. **`Circuit` is rewritten by replacement, never mutated.** `replace_gates`
-   returns a new `Circuit` with the same registers. `Gate` is frozen, so a pass
-   physically cannot corrupt the input it is being compared against — which
-   matters, because the input is the reference the oracle checks against.
+**The flat gate list is one topological order of a DAG, not the semantics.**
+Two gates must keep their relative order if and only if they share a qubit;
+gates on disjoint qubits commute trivially as tensor factors. Passes are
+therefore written against `Circuit.qubit_wires()` — per qubit, the indices of
+the gates touching it, in order — rather than against list adjacency. That is
+what makes `commute-cancel` and the router's dependency front layer expressible
+at all.
+
+**`Circuit` is rewritten by replacement, never mutated.** `replace_gates`
+returns a new `Circuit` with the same registers, and `Gate` is frozen, so a
+pass physically cannot corrupt the input it is being compared against. Since
+that input is the reference the oracle checks against, the immutability is
+load-bearing rather than stylistic.
 
 `measure` and `barrier` participate as ordinary order-blocking nodes on their
 wires and are skipped by the simulator. There is no classical value model: a
 measure records *which* classical bit it targets and nothing more.
 
-## Interfaces
+## The oracle, and the four ways to misuse it
 
-### Public Python API (`quantum_compiler.__all__`, 24 names)
+`prove_equivalence` dispatches. At seven qubits or fewer (`PROOF_MAX_QUBITS`)
+it materialises both `2ⁿ×2ⁿ` unitaries and returns `method="exact-unitary"`
+with an aligned Frobenius difference norm and a process fidelity — a genuine
+up-to-global-phase proof. Above that it falls back to `check_equivalence` and
+returns `method="randomized"`. The caller is expected to surface which one it
+got; `ProofResult.summary()` does, and the randomized branch prints "circuit
+too large for an exact unitary proof" in its line.
 
-The contract-bearing ones:
+**The verdict is up to *global* phase only, and one phase for all inputs.**
+`check_equivalence` fixes the phase from the largest-magnitude amplitude of the
+*first* input and requires every later input to agree under that same phase. A
+per-input phase would accept `z` as equal to the identity, since every basis
+state is an eigenvector; the seeded random states exist to close that hole.
+Anyone loosening this loosens the project's only real claim.
+
+**The randomized battery is exhaustive only to three qubits.** `_test_inputs`
+returns *all* `2ⁿ` basis states for `n ≤ 3` plus four seeded random states. For
+`n ≥ 4` it returns only `{|0…0⟩, |1…1⟩, the n weight-one states}` plus the four
+random ones. So at `n ≤ 3` agreement under one shared phase settles the
+question; at `n ≥ 4` it is strong evidence rather than proof — which is why
+`prove_equivalence` prefers the unitary path up to seven qubits.
+
+**`check_routing_equivalence` needs both layouts.** `final_layout[l]` is the
+physical qubit carrying logical `l` at the end; `initial_layout` says where it
+started, and `None` means the trivial layout. The greedy router always starts
+trivially so it may omit it; **the sabre router chooses its own initial
+placement and must pass it**. Omitting it for a sabre result silently compares
+the wrong thing. The routers return `RoutingResult.initial_layout` precisely so
+callers do not have to remember which is which.
+
+## Python API
+
+`quantum_compiler.__all__` exports 24 names. The contract-bearing ones:
 
 ```python
 parse(source: str) -> Circuit                # raises LexError / ParseError
@@ -77,46 +105,15 @@ analyze(circuit: Circuit) -> CircuitMetrics
 to_dot(circuit: Circuit) -> str
 ```
 
-Contracts worth stating explicitly, because they are the ones a caller can get
-wrong:
+Two smaller contracts beyond the oracle's. `route` **raises** rather than
+returning a failure value: `ValueError` when the circuit needs more qubits than
+the coupling map has, or on an unknown strategy name. And parsers do not know
+the filename — `parse`/`parse_qasm` take source text only, `LexError` and
+`ParseError` carry 1-based `line`/`column`, and the caller supplies the path via
+`exc.format(path)` to get the gcc-style `file:line:col: error: …`. Any other
+front end has to do the same or its diagnostics will read `<input>`.
 
-- **`prove_equivalence` is the oracle.** It dispatches: at ≤ 7 qubits
-  (`PROOF_MAX_QUBITS`) it materialises both `2ⁿ×2ⁿ` unitaries and returns
-  `method="exact-unitary"` with an aligned Frobenius difference norm and a
-  process fidelity — a genuine up-to-global-phase proof. Above that it falls
-  back to `check_equivalence` and returns `method="randomized"`. The caller is
-  expected to surface which one it got; `ProofResult.summary()` does, and the
-  randomized branch says "circuit too large for an exact unitary proof" in the
-  line it prints.
-- **The verdict is up to *global* phase only, and one phase for all inputs.**
-  `check_equivalence` fixes the phase from the largest-magnitude amplitude of
-  the *first* input and requires every later input to agree under that same
-  phase. A per-input phase would accept `z` as equal to the identity (every
-  basis state is an eigenvector); the seeded random states exist to close that
-  hole. Anyone loosening this loosens the project's only real claim.
-- **The randomized battery is exhaustive only to 3 qubits.** `_test_inputs`
-  returns *all* `2ⁿ` basis states for `n ≤ 3`, plus 4 seeded random states.
-  For `n ≥ 4` it returns only `{|0…0⟩, |1…1⟩, the n weight-one states}` plus the
-  4 random states. So at `n ≤ 3` agreement under one shared phase settles the
-  question; at `n ≥ 4` it is strong evidence, not proof — which is why
-  `prove_equivalence` prefers the unitary path up to 7 qubits.
-- **`check_routing_equivalence` needs both layouts.** `final_layout[l]` is the
-  physical qubit carrying logical `l` at the end; `initial_layout` says where it
-  started, and `None` means the trivial layout. The greedy router always starts
-  trivially so it may omit it; **the sabre router chooses its own initial
-  placement and must pass it**. Omitting it for a sabre result silently
-  compares the wrong thing — the routers return `RoutingResult.initial_layout`
-  precisely so callers do not have to remember which is which.
-- **`route` raises**, it does not return a failure value: `ValueError` when the
-  circuit needs more qubits than the coupling map has, or on an unknown
-  strategy name.
-- **Parsers do not know the filename.** `parse`/`parse_qasm` take source text
-  only; `LexError`/`ParseError` carry 1-based `line`/`column`, and the caller
-  supplies the path via `exc.format(path)` to get the gcc-style
-  `file:line:col: error: …`. Any other front end must do the same or its
-  diagnostics will read `<input>`.
-
-### CLI (`quantum-compiler`, also `python -m quantum_compiler`)
+## CLI, where the exit codes are the API
 
 ```
 quantum-compiler compile FILE [--opt] [--emit ir|ascii|svg|qasm|dot] [--verify] [--proof] [--dce] [--out FILE]
@@ -126,38 +123,37 @@ quantum-compiler analyze FILE [--json]
 quantum-compiler stats   FILE [--dce]
 ```
 
-`.qasm` inputs are parsed as OpenQASM 2.0; anything else as the DSL. Diagnostics
-and verification lines go to **stderr**, the emitted artefact to **stdout** (or
-`--out`), so `compile … --emit qasm > out.qasm` is safe.
+`.qasm` inputs are parsed as OpenQASM 2.0; anything else as the DSL.
+Diagnostics and verification lines go to **stderr**, the emitted artefact to
+**stdout** or `--out`, so `compile … --emit qasm > out.qasm` is safe.
 
-**Exit codes are the API.** `0` success · `1` I/O error (unreadable file, or a
-non-UTF-8 file — `UnicodeDecodeError` is caught alongside `OSError` so a binary
-input reports cleanly instead of raising) · `2` usage or syntax error, with
-`file:line:col` · `3` **verification failed** — `--verify`/`--proof` rejected a
-circuit, or `equiv` proved the pair inequivalent.
+`0` success · `1` I/O error, including a non-UTF-8 file, because
+`UnicodeDecodeError` is caught alongside `OSError` so a binary input reports
+cleanly instead of raising · `2` usage or syntax error, with `file:line:col` ·
+`3` **verification failed** — `--verify`/`--proof` rejected a circuit, or
+`equiv` proved the pair inequivalent.
 
-### The one deliberate ordering decision in the CLI
+One ordering decision inside `_run_compile` is deliberate and worth defending:
+optimize → verify → **then** dead-code elimination. `--dce` requires `--opt`
+(otherwise exit `2`), runs after the oracle has passed, and prints a warning
+when combined with `--verify`/`--proof` saying it "is excluded from the
+equivalence guarantee". DCE is genuinely *not* statevector-preserving — it
+preserves measurement statistics on measured qubits but changes the unobserved
+state, so it fails this project's own check whenever it removes anything. The
+alternative, weakening the oracle to a measured-qubits-only comparison so that
+DCE could run inside the guarantee, was rejected; the PRD says why.
 
-In `_run_compile` the order is: optimize → verify → **then** dead-code
-elimination. `--dce` requires `--opt` (else exit `2`), runs after the oracle has
-passed, and prints a warning when combined with `--verify`/`--proof` saying it
-"is excluded from the equivalence guarantee". This is because DCE is genuinely
-*not* statevector-preserving: it preserves measurement statistics on measured
-qubits but changes the unobserved state, so it fails the project's own check
-whenever it removes anything. The alternative — weakening the oracle to a
-measured-qubits-only comparison so DCE could run inside the guarantee — was
-rejected; see the PRD.
+## What can be attacked
 
-## Access control
+There is no server, no database, no RLS, no authentication, no
+security-definer function, no `anon`/`public` grant, and no network I/O
+anywhere in the package — no `socket`, `urllib`, `requests` or `subprocess`
+import under `src/`. The process runs as the invoking user and touches only the
+paths given on the command line plus `--out`. There is likewise nothing to
+migrate: no persisted schema, and neither `.qf` nor OpenQASM 2.0 has ever
+changed shape, both being read-only inputs or freshly written outputs.
 
-**Not applicable, and stating that precisely is the point.** There is no
-server, no database, no RLS, no authentication, no security-definer function,
-no `anon`/`public` grant, and no network I/O anywhere in the package (no
-`socket`, `urllib`, `requests`, or `subprocess` import in `src/`). The process
-runs as the invoking user and touches only the paths given on the command line
-plus `--out`.
-
-The single trust boundary is **input text**, and it is defended in two places:
+The single trust boundary is input text, defended in two places:
 
 | Boundary | Threat | Control |
 |---|---|---|
@@ -167,15 +163,8 @@ The single trust boundary is **input text**, and it is defended in two places:
 Resource exhaustion is bounded rather than unbounded: `simulate` raises above
 `MAX_QUBITS = 10` and `circuit_unitary` above `PROOF_MAX_QUBITS = 7`, so a
 hostile input file cannot ask for a `2⁶⁴` allocation. It *can* still ask for a
-10-qubit circuit with a million gates and be slow; that is accepted for a local
-developer tool.
-
-## Migrations
-
-None. No database, no persisted schema, no on-disk format the project owns
-across versions. `.qf` and OpenQASM 2.0 are the only file formats, both are
-read-only inputs or freshly written outputs, and neither has ever changed
-shape.
+10-qubit circuit with a million gates and be slow. For a local developer tool
+that is accepted.
 
 ## Failure modes
 
@@ -191,84 +180,85 @@ shape.
 | Binary or non-UTF-8 input file | the user | `_read_source` catches `UnicodeDecodeError` with `OSError` | one clean message, exit `1`, no traceback |
 | Two circuits genuinely inequivalent under `equiv` | the user | the oracle | exit `3`, plus a counterexample witness and a ddmin-shrunk 1-minimal pair explaining *why* |
 
-There is no monitoring and no alerting, because there is no deployment: the
-only detector is CI (`pytest`, `ruff check .`, `mypy src` strict, gitleaks, all
-with 15-minute timeouts) and the user's own exit code.
+There is no monitoring and no alerting, because there is no deployment. The
+only detectors are CI — `pytest`, `ruff check .`, `mypy src` strict, gitleaks,
+all with 15-minute timeouts — and the user's own exit code.
 
 ## Rollback
 
 Nothing this project does is irreversible. It writes exactly one artefact, to
 stdout or to `--out`, and only after every requested check has passed.
 
-- **A bad release:** `git revert` and `pip install -e ".[dev]"`. There is no
-  state to migrate back, no cache to invalidate, no client to be out of step.
-- **A bad emitted circuit:** the input file is untouched; delete the output.
-- **The 2026-08-03 rename**, the only change with a blast radius beyond this
-  repo: it is a pure rename of the distribution, the import package, the
-  console script and one exception class. Undoing it is `git revert` of that
-  commit plus a reinstall. The one non-obvious consequence — and the reason the
-  CHANGELOG says it in bold — is that an **existing editable install keeps
-  pointing at `src/daedalus`, which no longer exists**, so every import fails
-  until `pip install -e ".[dev]"` is re-run. That is the whole cost, and it is
-  local to each checkout.
+A bad release is `git revert` plus `pip install -e ".[dev]"`: no state to
+migrate back, no cache to invalidate, no client left out of step. A bad emitted
+circuit costs nothing either — the input file is untouched, so delete the
+output.
+
+The 2026-08-03 rename is the only change with a blast radius beyond this repo,
+and even that is a pure rename of the distribution, the import package, the
+console script and one exception class. Undoing it is a `git revert` of that
+commit plus a reinstall. The non-obvious consequence, and the reason the
+CHANGELOG states it in bold, is that an **existing editable install keeps
+pointing at `src/daedalus`, which no longer exists**, so every import fails
+until `pip install -e ".[dev]"` is run again. That is the whole cost, and it is
+local to each checkout.
 
 ## Test plan
 
-493 tests, `pytest -q`, ~2s. The structure that matters:
+493 tests, `pytest -q`, about two seconds. The structure is the point.
 
-- **Positive, per pass.** Each `tests/test_pass_*.py` applies exactly one pass
-  and re-verifies the result against the input with the oracle. A pass is not
-  tested by "the whole pipeline still works".
-- **Negative, per pass.** Each pass is tested to be *blocked by a `barrier`* —
-  the fence has to hold for every rewrite, not on average
-  (`tests/test_barrier.py`).
-- **Boundary — the two oracles must agree.**
-  `tests/test_unitary.py::TestProveCircuitEquivalence::test_agrees_with_randomized_oracle`
-  runs both methods over the same circuits, correct and corrupted, and requires
-  the same verdict. That agreement is what makes the randomized fallback at 8+
-  qubits worth trusting; `tests/test_verify.py` separately pins the dispatch
-  (`method == "exact-unitary"` below the cap, `"randomized"` above it).
-- **Boundary — a real algorithm.** `tests/test_examples.py` builds the 3-qubit
-  QFT's unitary from elementary gates and proves it equals the analytic 8-point
-  DFT matrix up to global phase. This is the test that would catch a plausible
-  but wrong rotation convention, which no amount of self-consistency testing
-  would.
-- **Property, not fixture, for the shrinker.** The ddmin tests assert
-  *1-minimality* — the shrunk pair still disagrees, and removing any single
-  remaining gate makes it agree — rather than hardcoding an expected gate list.
-  A hardcoded list would have to be rewritten every time the search order
-  changed, and would stop testing the property.
-- **Round-trip.** Every example, original and optimized, goes out to QASM, comes
-  back, and is re-proven equivalent.
-- **CLI end to end**, including a real subprocess run of `python -m
-  quantum_compiler` and the exit codes.
+**Positive, per pass.** Each `tests/test_pass_*.py` applies exactly one pass and
+re-verifies the result against the input with the oracle. A pass is not tested
+by "the whole pipeline still works".
 
-## Build order (as executed)
+**Negative, per pass.** Each pass is tested to be *blocked by a `barrier`*. The
+fence has to hold for every rewrite, not on average (`tests/test_barrier.py`).
 
-The `docs/superpowers/specs/to-the-max.md` spec, Steps 0–8, all complete
-(2026-07-09), then v1.1.0 sabre routing (2026-07-30) and v1.2.0 `equiv`
-(2026-07-31). See `SESSION_HANDOFF.md`.
+**Boundary — the two oracles must agree.**
+`tests/test_unitary.py::TestProveCircuitEquivalence::test_agrees_with_randomized_oracle`
+runs both methods over the same circuits, correct and corrupted, and requires
+the same verdict. That agreement is what makes the randomized fallback at eight
+or more qubits worth trusting. `tests/test_verify.py` separately pins the
+dispatch: `method == "exact-unitary"` below the cap, `"randomized"` above it.
 
-## Open questions
+**Boundary — a real algorithm.** `tests/test_examples.py` builds the 3-qubit
+QFT's unitary from elementary gates and proves it equals the analytic 8-point
+DFT matrix up to global phase. This is the test that would catch a plausible
+but wrong rotation convention, which no amount of self-consistency testing
+would.
 
-None. The Roadmap items in the README (full SABRE decay factor and multiple
-reverse-traversal rounds, directed coupling maps, controlled-phase fusion) are
-unstarted ideas, not open design questions — each has an obvious place to go in
-`route.py` and `passes/`.
+**Property, not fixture, for the shrinker.** The ddmin tests assert
+*1-minimality* — the shrunk pair still disagrees, and removing any single
+remaining gate makes it agree — rather than hardcoding an expected gate list. A
+hardcoded list would need rewriting every time the search order changed, and
+would stop testing the property.
 
----
+**Round-trip.** Every example, original and optimized, goes out to QASM, comes
+back, and is re-proven equivalent.
 
-## Documents deliberately not written
+**CLI end to end**, including a real subprocess run of
+`python -m quantum_compiler` and its exit codes.
 
-**App Flow — not applicable.** The template describes screens, states,
-transitions, unauthorised access and offline behaviour. This is a
-non-interactive, single-shot CLI: it reads argv, reads a file, writes one
-artefact, and exits. There are no screens, no sessions, no persistence, no
+## Build order
+
+Steps 0–8 of `docs/superpowers/specs/to-the-max.md`, all complete on
+2026-07-09; then v1.1.0 sabre routing on 2026-07-30 and v1.2.0 `equiv` on
+2026-07-31. `SESSION_HANDOFF.md` has the detail.
+
+Nothing is an open design question. The README's Roadmap items — the full SABRE
+decay factor and multiple reverse-traversal rounds, directed coupling maps,
+controlled-phase fusion — are unstarted ideas, each with an obvious place to go
+in `route.py` and `passes/`.
+
+## Why there is no App Flow document
+
+This is a non-interactive, single-shot CLI. It reads argv, reads a file, writes
+one artefact, and exits. There are no screens, no sessions, no persistence, no
 partial states to resume, and nothing to be signed out of. The complete
-"transition model" is the exit-code table above, which belongs here. Writing an
-App Flow document for it would mean inventing states the program does not have.
+transition model is the exit-code paragraph above, which belongs here. Writing
+a flow document for it would mean inventing states the program does not have.
 
-**Design Brief — written**, but scoped tightly: see
-[DESIGN_BRIEF.md](DESIGN_BRIEF.md). The project has one genuine visual surface
-(the ASCII and SVG circuit diagrams), and the notation choices in it are real
-design decisions with real consequences for whether the output is readable.
+The [Design Brief](DESIGN_BRIEF.md) *is* written, scoped tightly to the one
+genuine visual surface: the ASCII and SVG circuit diagrams. The notation choices
+there are real design decisions with real consequences for whether the output
+can be read.
