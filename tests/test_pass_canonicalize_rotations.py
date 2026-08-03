@@ -9,10 +9,10 @@ import math
 
 import pytest
 
-from daedalus.ir import Circuit, Gate
-from daedalus.parser import parse
-from daedalus.passes.canonicalize_rotations import CanonicalizeRotations
-from daedalus.unitary import prove_circuit_equivalence
+from quantum_compiler.ir import Circuit, Gate
+from quantum_compiler.parser import parse
+from quantum_compiler.passes.canonicalize_rotations import CanonicalizeRotations
+from quantum_compiler.unitary import prove_circuit_equivalence
 
 
 def run(src: str) -> Circuit:

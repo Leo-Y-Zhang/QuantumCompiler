@@ -3,7 +3,7 @@ requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "daedalus"
+name = "quantum-compiler"
 version = "1.2.0"
 description = "Toy educational quantum-circuit DSL compiler with verified optimization passes. Python stdlib only."
 readme = "README.md"
@@ -24,7 +24,7 @@ classifiers = [
 dev = ["pytest>=8", "ruff>=0.6", "mypy>=1.11"]
 
 [project.scripts]
-daedalus = "daedalus.cli:main"
+quantum-compiler = "quantum_compiler.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

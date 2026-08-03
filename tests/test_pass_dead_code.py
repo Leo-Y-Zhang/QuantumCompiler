@@ -1,8 +1,8 @@
 """Tests for opt-in dead-code elimination and its documented caveat."""
 
-from daedalus.parser import parse
-from daedalus.passes.dead_code import DeadCodeElimination
-from daedalus.verify import check_equivalence
+from quantum_compiler.parser import parse
+from quantum_compiler.passes.dead_code import DeadCodeElimination
+from quantum_compiler.verify import check_equivalence
 
 PASS = DeadCodeElimination()
 

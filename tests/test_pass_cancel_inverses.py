@@ -1,8 +1,8 @@
 """Tests for the adjacent inverse-pair cancellation pass."""
 
-from daedalus.parser import parse
-from daedalus.passes.cancel_inverses import CancelInverses
-from daedalus.verify import check_equivalence
+from quantum_compiler.parser import parse
+from quantum_compiler.passes.cancel_inverses import CancelInverses
+from quantum_compiler.verify import check_equivalence
 
 PASS = CancelInverses()
 

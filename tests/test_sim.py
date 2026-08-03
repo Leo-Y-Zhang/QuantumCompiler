@@ -6,9 +6,9 @@ import random
 
 import pytest
 
-from daedalus.ir import Circuit
-from daedalus.parser import parse
-from daedalus.sim import MAX_QUBITS, basis_state, random_state, simulate
+from quantum_compiler.ir import Circuit
+from quantum_compiler.parser import parse
+from quantum_compiler.sim import MAX_QUBITS, basis_state, random_state, simulate
 
 INV_SQRT2 = 1 / math.sqrt(2)
 

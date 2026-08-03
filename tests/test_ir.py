@@ -1,7 +1,7 @@
 """Tests for the gate-list IR and its per-qubit wire (DAG) structure."""
 
-from daedalus.ir import dump
-from daedalus.parser import parse
+from quantum_compiler.ir import dump
+from quantum_compiler.parser import parse
 
 SRC = """\
 qubits 3

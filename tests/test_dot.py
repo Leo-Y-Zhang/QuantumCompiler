@@ -1,7 +1,7 @@
 """Graphviz DOT export of the dependency DAG."""
 
-from daedalus.dot import to_dot
-from daedalus.parser import parse
+from quantum_compiler.dot import to_dot
+from quantum_compiler.parser import parse
 
 
 class TestDot:

@@ -2,10 +2,10 @@
 
 import pytest
 
-from daedalus.equiv import find_witness, shrink_counterexample
-from daedalus.ir import Circuit
-from daedalus.parser import parse
-from daedalus.verify import prove_equivalence
+from quantum_compiler.equiv import find_witness, shrink_counterexample
+from quantum_compiler.ir import Circuit
+from quantum_compiler.parser import parse
+from quantum_compiler.verify import prove_equivalence
 
 
 def assert_one_minimal(a: Circuit, b: Circuit) -> None:

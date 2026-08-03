@@ -11,14 +11,14 @@ import random
 
 import pytest
 
-from daedalus.parser import parse
-from daedalus.unitary import (
+from quantum_compiler.parser import parse
+from quantum_compiler.unitary import (
     PROOF_MAX_QUBITS,
     circuit_unitary,
     compare_unitaries,
     prove_circuit_equivalence,
 )
-from daedalus.verify import check_equivalence
+from quantum_compiler.verify import check_equivalence
 
 SQRT1_2 = 1 / math.sqrt(2)
 

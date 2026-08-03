@@ -5,10 +5,10 @@ window and rewrites it to a single reversed cx (5 -> 1). Every rewrite is
 proven equivalent by the exact unitary.
 """
 
-from daedalus.parser import parse
-from daedalus.passes import PassManager, default_passes
-from daedalus.passes.control_flip import ControlFlip
-from daedalus.unitary import prove_circuit_equivalence
+from quantum_compiler.parser import parse
+from quantum_compiler.passes import PassManager, default_passes
+from quantum_compiler.passes.control_flip import ControlFlip
+from quantum_compiler.unitary import prove_circuit_equivalence
 
 PASS = ControlFlip()
 

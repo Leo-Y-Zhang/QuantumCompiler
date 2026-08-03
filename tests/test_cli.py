@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from daedalus import cli
-from daedalus.equiv import Witness
-from daedalus.verify import EquivalenceResult
+from quantum_compiler import cli
+from quantum_compiler.equiv import Witness
+from quantum_compiler.verify import EquivalenceResult
 
 PROGRAM = """\
 qubits 2
@@ -90,7 +90,7 @@ class TestCompile:
         assert "process fidelity" in err
 
     def test_proof_failure_exits_3(self, program: Path, capsys, monkeypatch) -> None:
-        from daedalus.verify import ProofResult
+        from quantum_compiler.verify import ProofResult
 
         failed = ProofResult(
             equivalent=False, method="exact-unitary", max_error=1.0, inputs_checked=4
@@ -145,7 +145,7 @@ class TestRoute:
         assert "qubits" in capsys.readouterr().err
 
     def test_route_verify_failure_exits_3(self, far: Path, capsys, monkeypatch) -> None:
-        from daedalus.verify import EquivalenceResult
+        from quantum_compiler.verify import EquivalenceResult
 
         failed = EquivalenceResult(equivalent=False, max_error=1.0, inputs_checked=8)
         monkeypatch.setattr(cli, "check_routing_equivalence", lambda *a, **k: failed)
@@ -538,7 +538,7 @@ class TestWitnessRendering:
 class TestSubprocessEndToEnd:
     def run_cli(self, *args: str) -> subprocess.CompletedProcess:
         return subprocess.run(
-            [sys.executable, "-m", "daedalus", *args],
+            [sys.executable, "-m", "quantum_compiler", *args],
             capture_output=True,
             text=True,
             timeout=120,
@@ -581,7 +581,7 @@ class TestSubprocessEndToEnd:
     def test_version(self) -> None:
         result = self.run_cli("--version")
         assert result.returncode == 0
-        assert "daedalus 1.2.0" in result.stdout
+        assert "quantum-compiler 1.2.0" in result.stdout
 
     def test_usage_error_exit_2(self) -> None:
         result = self.run_cli()

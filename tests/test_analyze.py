@@ -2,8 +2,8 @@
 
 import json
 
-from daedalus.analyze import analyze, format_report, metrics_to_dict
-from daedalus.parser import parse
+from quantum_compiler.analyze import analyze, format_report, metrics_to_dict
+from quantum_compiler.parser import parse
 
 
 class TestMetrics:

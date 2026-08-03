@@ -4,10 +4,10 @@ import itertools
 import math
 import random
 
-from daedalus.ir import Circuit, Gate
-from daedalus.parser import parse
-from daedalus.passes import PassManager, default_passes
-from daedalus.verify import check_equivalence
+from quantum_compiler.ir import Circuit, Gate
+from quantum_compiler.parser import parse
+from quantum_compiler.passes import PassManager, default_passes
+from quantum_compiler.verify import check_equivalence
 
 
 def optimize(src: str):
