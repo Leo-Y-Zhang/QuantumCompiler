@@ -95,13 +95,6 @@ and the SVG writer hand-rolled; and a README that states what the project is
 - Resource analysis, including T-count — the metric that actually matters in
   fault-tolerant quantum computing.
 
-**Won't, this time**
-
-- Hardware backends, device calibration data, or noise models.
-- Classical control flow (`if`), mid-circuit measurement collapse, or reset.
-- User-defined gate declarations in the DSL or in imported QASM.
-- Any claim of optimality from either router.
-
 ## The boundary
 
 **Being a useful quantum compiler** is outside it. The simulator caps at 10
@@ -109,6 +102,11 @@ qubits and the exact prover at 7. That is not a bug awaiting a fix; it is the
 boundary that makes verification-by-simulation possible at all. Past roughly 30
 qubits the whole method stops existing, and nothing in this design extends
 beyond it.
+
+**Hardware** is outside it: no backends, no device calibration data, no noise
+models. So is the dynamic half of the gate set — classical control flow (`if`),
+mid-circuit measurement collapse and `reset` are all unbuilt, and neither the
+DSL nor the QASM importer supports user-defined gate declarations.
 
 **Measurement semantics** are outside it. `measure` is a marker on a wire. The
 simulator compares *pre-measurement* statevectors: no collapse, no sampling, no
@@ -156,7 +154,7 @@ to the project's credibility — which is exactly why the honest-limits framing
 in the README is treated as a feature rather than as marketing copy to be
 softened later.
 
-## Other roads not taken
+## What was weighed and set aside
 
 **Building on Qiskit or NumPy.** The parts a dependency would supply — the
 simulator, the unitary construction, the transpiler — are precisely the parts
