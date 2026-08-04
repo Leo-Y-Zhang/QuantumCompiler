@@ -8,7 +8,7 @@ version = "1.2.0"
 description = "Toy educational quantum-circuit DSL compiler with verified optimization passes. Python stdlib only."
 readme = "README.md"
 license = { text = "Proprietary - All Rights Reserved" }
-authors = [{ name = "GreenPandaTech" }]
+authors = [{ name = "Leo-Y-Zhang" }]
 requires-python = ">=3.10"
 dependencies = []
 keywords = ["quantum", "compiler", "dsl", "education", "optimization"]
