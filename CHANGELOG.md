@@ -12,7 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
   | was | is |
   |---|---|
-  | GitHub repo `GreenPandaTech/Daedalus` | `GreenPandaTech/QuantumCompiler` |
+  | GitHub repo `Leo-Y-Zhang/Daedalus` | `Leo-Y-Zhang/QuantumCompiler` |
   | distribution name `daedalus` | `quantum-compiler` |
   | import package `daedalus` | `quantum_compiler` |
   | console script `daedalus …` | `quantum-compiler …` |

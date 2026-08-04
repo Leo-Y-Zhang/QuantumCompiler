@@ -1,6 +1,6 @@
 # QuantumCompiler — a toy quantum-circuit compiler whose optimizations are proven correct by simulation
 
-[![CI](https://github.com/GreenPandaTech/QuantumCompiler/actions/workflows/ci.yml/badge.svg)](https://github.com/GreenPandaTech/QuantumCompiler/actions/workflows/ci.yml)
+[![CI](https://github.com/Leo-Y-Zhang/QuantumCompiler/actions/workflows/ci.yml/badge.svg)](https://github.com/Leo-Y-Zhang/QuantumCompiler/actions/workflows/ci.yml)
 
 *A small compiler for quantum circuits: it parses a circuit DSL, rewrites the
 circuit to be cheaper, and then proves the rewrite did not change what the
@@ -434,4 +434,4 @@ examples are synthetic.
 
 ## License
 
-Proprietary - All Rights Reserved (c) 2026 GreenPandaTech - portfolio viewing only.
+Proprietary - All Rights Reserved (c) 2026 Leo-Y-Zhang - portfolio viewing only.
