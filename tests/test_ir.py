@@ -57,3 +57,10 @@ class TestDump:
     def test_dump_formats_pi_angles(self) -> None:
         text = dump(parse("qubits 1\nrz(pi/4) q0\n"))
         assert "rz(pi/4) q0" in text
+
+    def test_dump_round_trips_a_tiny_angle(self) -> None:
+        # An angle the DSL happily accepts on the way in must survive the way
+        # out: 1e-05 is small enough that repr() reaches for exponent notation.
+        circuit = parse("qubits 1\nrz(0.00001) q0\n")
+        again = parse(dump(circuit))
+        assert again.gates == circuit.gates

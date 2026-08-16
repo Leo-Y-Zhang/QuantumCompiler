@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Sequence
+from decimal import Decimal
 from fractions import Fraction
 
 from quantum_compiler.errors import ParseError
@@ -99,7 +100,15 @@ def _atom(tokens: Sequence[Token], pos: int) -> tuple[float, int]:
 
 
 def format_angle(theta: float) -> str:
-    """Format *theta* as DSL source: ``pi/4`` style when close, else ``repr``."""
+    """Format *theta* as DSL source: ``pi/4`` style when close, else a decimal.
+
+    The decimal fallback is ``repr`` written positionally. ``repr`` switches to
+    exponent notation outside roughly ``1e-4 .. 1e16`` and the DSL grammar has
+    no exponent literal, so emitting it verbatim would produce source this
+    package's own parser rejects. Expanding the same digits through
+    :class:`~decimal.Decimal` keeps the value bit-exact (``repr`` is already
+    the shortest round-tripping decimal) and keeps the text parseable.
+    """
     if theta == 0:
         return "0"
     frac = Fraction(theta / math.pi).limit_denominator(_MAX_DENOMINATOR)
@@ -108,4 +117,7 @@ def format_angle(theta: float) -> str:
         num, den = abs(frac.numerator), frac.denominator
         pi_part = "pi" if num == 1 else f"{num}*pi"
         return f"{sign}{pi_part}" if den == 1 else f"{sign}{pi_part}/{den}"
-    return repr(theta)
+    text = repr(theta)
+    if "e" in text or "E" in text:
+        return format(Decimal(text), "f")
+    return text

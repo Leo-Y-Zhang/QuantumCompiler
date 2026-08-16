@@ -104,3 +104,10 @@ class TestFormatAngle:
     def test_round_trip(self) -> None:
         for theta in (math.pi / 3, -math.pi / 8, 5 * math.pi / 6, 1.234):
             assert evaluate(format_angle(theta)) == pytest.approx(theta, abs=1e-15)
+
+    def test_exponent_scale_angles_stay_parseable(self) -> None:
+        # repr() switches to exponent notation outside roughly 1e-4..1e16, and
+        # the DSL has no exponent literal, so the emitted text must stay
+        # positional or dump() produces source the parser rejects.
+        for theta in (1e-05, -2.5e-07, 1e20, 1.5e-11):
+            assert evaluate(format_angle(theta)) == theta
