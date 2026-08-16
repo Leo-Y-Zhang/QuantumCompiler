@@ -227,13 +227,21 @@ def _run_compile(args: argparse.Namespace, original: Circuit) -> int:
     if args.opt:
         optimized, _ = PassManager(default_passes()).run(original)
     if args.proof:
-        proof = prove_equivalence(original, optimized)
+        try:
+            proof = prove_equivalence(original, optimized)
+        except ValueError as exc:  # circuit beyond the simulator's qubit cap
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
         print(proof.summary(), file=sys.stderr)
         if not proof.equivalent:
             print("refusing to emit a non-equivalent circuit", file=sys.stderr)
             return 3
     elif args.verify:
-        result = check_equivalence(original, optimized)
+        try:
+            result = check_equivalence(original, optimized)
+        except ValueError as exc:  # circuit beyond the simulator's qubit cap
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
         if not result.equivalent:
             print(
                 f"verify: not equivalent (max error {result.max_error:.3e}); "
@@ -302,12 +310,16 @@ def _run_route(args: argparse.Namespace, original: Circuit) -> int:
         return 2
     _report_routing(original, result, coupling, strategy=args.strategy)
     if args.verify:
-        check = check_routing_equivalence(
-            original,
-            result.circuit,
-            result.final_layout,
-            initial_layout=result.initial_layout,
-        )
+        try:
+            check = check_routing_equivalence(
+                original,
+                result.circuit,
+                result.final_layout,
+                initial_layout=result.initial_layout,
+            )
+        except ValueError as exc:  # circuit beyond the simulator's qubit cap
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
         if not check.equivalent:
             print(
                 f"verify: routing changed semantics (max error {check.max_error:.3e}); "

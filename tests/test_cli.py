@@ -104,6 +104,28 @@ class TestCompile:
         assert code == 0
         assert "dead-code" in capsys.readouterr().err
 
+    @pytest.fixture()
+    def oversize(self, tmp_path: Path) -> Path:
+        path = tmp_path / "big.qf"
+        path.write_text("qubits 11\nh q0\nh q0\n", encoding="ascii")
+        return path
+
+    def test_verify_beyond_the_qubit_cap_exits_2_cleanly(
+        self, oversize: Path, capsys
+    ) -> None:
+        # The oracle cannot run at this size; say so the way equiv does rather
+        # than letting the ValueError escape as a traceback.
+        assert cli.main(["compile", str(oversize), "-O", "--verify"]) == 2
+        err = capsys.readouterr().err
+        assert "at most 10" in err
+        assert "Traceback" not in err
+
+    def test_proof_beyond_the_qubit_cap_exits_2_cleanly(
+        self, oversize: Path, capsys
+    ) -> None:
+        assert cli.main(["compile", str(oversize), "-O", "--proof"]) == 2
+        assert "at most 10" in capsys.readouterr().err
+
 
 class TestRoute:
     @pytest.fixture()
@@ -143,6 +165,16 @@ class TestRoute:
     def test_route_too_small_map_exit_2(self, far: Path, capsys) -> None:
         assert cli.main(["route", str(far), "--coupling", "line:2"]) == 2
         assert "qubits" in capsys.readouterr().err
+
+    def test_route_verify_beyond_the_qubit_cap_exits_2_cleanly(
+        self, tmp_path: Path, capsys
+    ) -> None:
+        big = tmp_path / "big.qf"
+        big.write_text("qubits 11\nh q0\ncx q0, q10\n", encoding="ascii")
+        assert cli.main(["route", str(big), "--coupling", "line", "--verify"]) == 2
+        err = capsys.readouterr().err
+        assert "at most 10" in err
+        assert "Traceback" not in err
 
     def test_route_verify_failure_exits_3(self, far: Path, capsys, monkeypatch) -> None:
         from quantum_compiler.verify import EquivalenceResult

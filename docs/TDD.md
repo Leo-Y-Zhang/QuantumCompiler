@@ -168,7 +168,7 @@ that is accepted.
 
 ## What the tests are shaped to catch
 
-493 tests, `pytest -q`, about two seconds. The structure is the point.
+498 tests, `pytest -q`, about two seconds. The structure is the point.
 
 **Positive, per pass.** Each `tests/test_pass_*.py` applies exactly one pass and
 re-verifies the result against the input with the oracle. A pass is not tested
