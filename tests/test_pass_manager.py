@@ -4,10 +4,13 @@ import itertools
 import math
 import random
 
+import pytest
+
 from quantum_compiler.ir import Circuit, Gate
 from quantum_compiler.parser import parse
 from quantum_compiler.passes import PassManager, default_passes
-from quantum_compiler.verify import check_equivalence
+from quantum_compiler.unitary import PROOF_MAX_QUBITS
+from quantum_compiler.verify import check_equivalence, prove_equivalence
 
 
 def optimize(src: str):
@@ -86,6 +89,48 @@ class TestPipelineSemantics:
             assert len(optimized.gates) <= len(original.gates)
             result = check_equivalence(original, optimized)
             assert result.equivalent, f"seed {seed}: max_error={result.max_error}"
+
+
+
+class TestNearIdentityTolerance:
+    """Snapping or dropping a rotation must never fail the pipeline's own proof.
+
+    Rewriting a rotation that is delta away from a special angle changes the
+    unitary by rz(delta), whose aligned Frobenius norm on n qubits is about
+    delta * sqrt(2**(n - 1)). At the largest exact-proof size that is 8 * delta,
+    so the passes' snapping tolerance has to sit well below the proof's
+    ``atol`` / 8 or ``compile --opt --proof`` rejects its own output.
+    """
+
+    # 9e-10 (the DSL has no exponent literal): below the old 1e-9 snapping
+    # tolerance, far above float noise.
+    OFF = "0.0000000009"
+
+    @pytest.mark.parametrize(
+        "rotations",
+        [
+            "rz({off}) q0",  # canonicalize: drop a near-zero rotation
+            "rz(pi/2 + {off}) q0",  # canonicalize: snap to s
+            "rx(pi + {off}) q0",  # canonicalize: snap to x
+            "rx(0.5) q0\nrx(-0.5 + {off}) q0",  # merge: drop a near-zero sum
+            "rz(0.5) q0\ncx q0, q1\nrz(-0.5 + {off}) q0",  # commute-cancel
+        ],
+        ids=["drop", "snap-s", "snap-x", "merge", "commute-cancel"],
+    )
+    def test_proof_accepts_pipeline_output(self, rotations: str) -> None:
+        src = f"qubits {PROOF_MAX_QUBITS}\n" + rotations.format(off=self.OFF) + "\n"
+        original = parse(src)
+        optimized, _ = PassManager(default_passes()).run(original)
+        proof = prove_equivalence(original, optimized)
+        assert proof.equivalent, proof.summary()
+
+    def test_float_noise_still_snaps(self) -> None:
+        # 0.1 + 0.2 - 0.3 is 5.6e-17, pi/4 + pi/4 is pi/2 to the last bit or so:
+        # the tighter tolerance must still treat such sums as exact.
+        circuit, _ = optimize("qubits 1\nrz(0.1) q0\nrz(0.2) q0\nrz(-0.3) q0\n")
+        assert circuit.gates == []
+        circuit, _ = optimize("qubits 1\nrz(pi/8) q0\nrz(pi/8) q0\nrz(pi/4) q0\n")
+        assert [g.name for g in circuit.gates] == ["s"]
 
 
 def _random_circuit(rng: random.Random, num_qubits: int = 4, num_gates: int = 30) -> Circuit:

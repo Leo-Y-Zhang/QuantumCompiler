@@ -14,7 +14,16 @@ from dataclasses import replace
 from quantum_compiler.ir import Circuit, Gate
 
 _ROTATIONS = frozenset({"rx", "ry", "rz"})
-EPSILON = 1e-9
+
+#: How far from an exact angle a rotation may be and still be treated as that
+#: angle (dropped here, or snapped to a named gate by canonicalize-rotations).
+#: Rewriting a rotation that is ``delta`` off changes the circuit by
+#: ``r(delta)``, an aligned Frobenius error of about ``delta * sqrt(2**(n-1))``
+#: on ``n`` qubits: ``8 * delta`` at the exact proof's 7-qubit limit. The
+#: tolerance therefore sits far below the proof's ``atol`` (1e-9) / 8, so the
+#: optimizer can never produce a rewrite its own ``--proof`` rejects, while
+#: staying far above the rounding error of summed angles (~1e-16 per add).
+EPSILON = 1e-12
 
 
 def is_zero_mod_two_pi(angle: float) -> bool:

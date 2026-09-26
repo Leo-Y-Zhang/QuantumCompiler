@@ -23,8 +23,7 @@ from __future__ import annotations
 import math
 
 from quantum_compiler.ir import Circuit, Gate
-
-EPSILON = 1e-9
+from quantum_compiler.passes.merge_rotations import EPSILON
 
 _ROTATIONS = frozenset({"rx", "ry", "rz"})
 
