@@ -20,9 +20,10 @@ _ROTATIONS = frozenset({"rx", "ry", "rz"})
 #: Rewriting a rotation that is ``delta`` off changes the circuit by
 #: ``r(delta)``, an aligned Frobenius error of about ``delta * sqrt(2**(n-1))``
 #: on ``n`` qubits: ``8 * delta`` at the exact proof's 7-qubit limit. The
-#: tolerance therefore sits far below the proof's ``atol`` (1e-9) / 8, so the
-#: optimizer can never produce a rewrite its own ``--proof`` rejects, while
-#: staying far above the rounding error of summed angles (~1e-16 per add).
+#: tolerance therefore sits far below the proof's ``atol`` (1e-9) / 8: it takes
+#: over a hundred worst-case rewrites in one circuit before ``--proof`` could
+#: reject the optimizer's output (at 1e-9 a single one did). It stays far
+#: above the rounding error of summed angles (~1e-16 per add near pi).
 EPSILON = 1e-12
 
 
