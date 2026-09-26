@@ -14,6 +14,8 @@ Every diagnostic carries the 1-based line/column of the offending token.
 
 from __future__ import annotations
 
+import math
+
 from quantum_compiler.angles import parse_expression
 from quantum_compiler.errors import ParseError
 from quantum_compiler.ir import Circuit, Gate
@@ -120,7 +122,12 @@ class _Parser:
 
     def parse_count(self, what: str, minimum: int) -> int:
         token = self.peek()
-        if token.kind != "NUMBER" or token.value is None or token.value != int(token.value):
+        if (
+            token.kind != "NUMBER"
+            or token.value is None
+            or not math.isfinite(token.value)
+            or token.value != int(token.value)
+        ):
             raise ParseError(
                 f"{what} must be an integer, found {describe(token)}",
                 token.line,

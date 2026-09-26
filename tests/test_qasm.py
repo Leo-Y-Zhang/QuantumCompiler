@@ -139,6 +139,8 @@ class TestImporterErrors:
             (PRELUDE + "rx q[0];\n", 5, 4, "requires an angle"),
             (PRELUDE + "h c[0];\n", 5, 3, "classical register 'c'"),
             (PRELUDE + "measure q[0] -> q[0];\n", 5, 17, "qubit register 'q'"),
+            (PRELUDE + "rz(1e999) q[0];\n", 5, 4, "not a finite number"),
+            (PRELUDE + "rx(1e308*10) q[0];\n", 5, 4, "not a finite number"),
             ("OPENQASM 2.0;\nqreg q[0];\n", 2, 8, "at least 1"),
             ("OPENQASM 2.0;\nqreg q[2.5];\n", 2, 8, "must be an integer"),
             (
