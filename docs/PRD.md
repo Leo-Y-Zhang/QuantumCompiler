@@ -51,7 +51,7 @@ Everything else about the verification story follows from taking that seriously:
 
 - Every optimization pass is re-verified against the unoptimized circuit, and
   the suite asserts it **per pass**, not once globally (`tests/test_pass_*.py`,
-  525 tests in total).
+  530 tests in total).
 - The oracle has an *exact* mode, not only a sampled one. For circuits up to
   seven qubits it builds both `2ⁿ×2ⁿ` unitaries and compares them, so at least
   some verdicts are genuine proofs (`unitary.py`, `PROOF_MAX_QUBITS = 7`).
