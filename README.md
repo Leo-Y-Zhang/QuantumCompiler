@@ -334,7 +334,7 @@ python -m venv .venv
 .venv/Scripts/python.exe -m pip install -e ".[dev]"   # Windows
 # .venv/bin/python -m pip install -e ".[dev]"          # Linux/macOS
 
-.venv/Scripts/python.exe -m pytest -q                  # 525 tests
+.venv/Scripts/python.exe -m pytest -q                  # 530 tests
 .venv/Scripts/python.exe -m ruff check .               # lint
 .venv/Scripts/python.exe -m mypy src                   # strict types
 ```
@@ -376,7 +376,7 @@ src/quantum_compiler/
   dot.py         Graphviz DOT export of the dependency DAG
   qasm.py        OpenQASM 2.0 emitter + documented-subset importer
   cli.py         argparse CLI (compile / route / equiv / analyze / stats)
-tests/           525 pytest tests: parser errors by position, every pass, hand-
+tests/           530 pytest tests: parser errors by position, every pass, hand-
                  computed amplitudes (Bell/GHZ), exact-vs-randomized agreement,
                  verified routing (both strategies) across five topologies, the
                  QFT-equals-DFT proof, equivalence witnesses + 1-minimality of

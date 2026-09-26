@@ -53,6 +53,13 @@ class TestDoesNotFire:
         original = parse("qubits 2\nh q0\nh q1\ncx q0, q1\n")
         assert PASS.run(original) is original
 
+    def test_cx_first_on_a_wire_has_no_leading_hadamard(self) -> None:
+        # The cx is the first gate on q0, so the wire has no "before" gate even
+        # though it ends in h (a wrap-around to the wire's last gate would
+        # wrongly see one).
+        original = parse("qubits 2\nh q1\ncx q0, q1\nh q0\nh q1\nx q0\nh q0\n")
+        assert PASS.run(original) is original
+
     def test_wrong_gate_in_sandwich(self) -> None:
         original = parse("qubits 2\nx q0\nh q1\ncx q0, q1\nh q0\nh q1\n")
         assert PASS.run(original) is original

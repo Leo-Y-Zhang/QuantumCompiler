@@ -89,6 +89,17 @@ class TestXBasisAcrossTarget:
         src = "qubits 2\nz q1\ncx q0, q1\nz q1\n"
         assert names(src) == ["z", "cx", "z"]
 
+    @pytest.mark.parametrize("gate", ["x", "rx(0.3)"])
+    @pytest.mark.parametrize("qubit", ["q0", "q1"])
+    def test_cz_blocks_x_type_gates(self, gate: str, qubit: str) -> None:
+        # cz is not X-diagonal on either qubit: X (x) I . CZ = CZ . X (x) Z, so
+        # an x-type pair around a cz must survive (the docstring's exclusion).
+        undo = "x" if gate == "x" else "rx(-0.3)"
+        src = f"qubits 2\nh q0\nh q1\n{gate} {qubit}\ncz q0, q1\n{undo} {qubit}\n"
+        original = parse(src)
+        assert names(src) == ["h", "h", gate.split("(")[0], "cz", undo.split("(")[0]]
+        assert prove_circuit_equivalence(original, PASS.run(original)).equivalent
+
     def test_x_basis_across_target_preserves_semantics(self) -> None:
         src = "qubits 2\nh q0\nrx(0.3) q1\ncx q0, q1\nrx(-0.3) q1\n"
         original = parse(src)
