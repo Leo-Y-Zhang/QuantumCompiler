@@ -31,6 +31,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `docs/PRD.md` and `docs/TDD.md`: retrospective product and technical design
   documents derived from the shipped code.
 
+### Fixed
+
+- The rotation passes no longer produce rewrites that `--proof` rejects.
+  `merge-rotations`, `commute-cancel` and `canonicalize-rotations` treated any
+  angle within `1e-9` of a special value as exact, but at 7 qubits that shifts
+  the unitary by up to about `8e-9`, eight times the proof's `atol`: `qubits 7`
+  with `rz(pi/2 + 0.0000000009) q0` optimized to `s` and `compile --opt --proof`
+  then refused its own output. The shared tolerance is now `1e-12`.
+- An angle that overflows a float (`rz(1e999)` in OpenQASM, a 400-digit
+  literal, `1e308*10`) is a positioned parse error; it used to parse as
+  `rz(inf)` and crash the optimizer with a bare `ValueError`. A 400-digit
+  `qubits` count is likewise a parse error instead of an `OverflowError`.
+
 ## [1.2.0] - 2026-07-31
 
 The "equiv" release: the equivalence oracle becomes a standalone two-circuit

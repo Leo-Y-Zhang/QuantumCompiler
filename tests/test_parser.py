@@ -126,6 +126,18 @@ class TestParseErrors:
         with pytest.raises(ParseError):
             parse("qubits 1.5\n")
 
+    def test_overflowing_angle_is_a_parse_error(self) -> None:
+        # Previously parsed to rz(inf) and crashed canonicalize-rotations with
+        # a bare ValueError from math.remainder.
+        with pytest.raises(ParseError, match="not a finite number") as exc:
+            parse("qubits 1\nrz(" + "9" * 400 + ") q0\n")
+        assert (exc.value.line, exc.value.column) == (2, 4)
+
+    def test_overflowing_qubit_count_is_a_parse_error(self) -> None:
+        # Previously an OverflowError from int(inf) escaped the parser.
+        with pytest.raises(ParseError, match="qubit count must be an integer"):
+            parse("qubits " + "9" * 400 + "\n")
+
     def test_error_in_angle_expression_position(self) -> None:
         with pytest.raises(ParseError) as exc:
             parse("qubits 1\nrz(pi/) q0\n")
