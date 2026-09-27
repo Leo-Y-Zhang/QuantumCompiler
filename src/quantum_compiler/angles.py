@@ -38,12 +38,23 @@ def evaluate(text: str) -> float:
 
 
 def parse_expression(tokens: Sequence[Token], pos: int) -> tuple[float, int]:
-    """Parse an expression starting at ``tokens[pos]``; return (value, next_pos)."""
+    """Parse an expression starting at ``tokens[pos]``; return (value, next_pos).
+
+    A value that overflows to ``inf`` (or becomes ``nan``) is rejected here, at
+    the expression's first token: no gate has a meaningful non-finite angle,
+    and letting one through would surface later as an uncaught
+    ``math.remainder`` domain error inside the optimizer.
+    """
+    start = tokens[pos]
     value, pos = _term(tokens, pos)
     while tokens[pos].kind in ("PLUS", "MINUS"):
         op = tokens[pos]
         rhs, pos = _term(tokens, pos + 1)
         value = value + rhs if op.kind == "PLUS" else value - rhs
+    if not math.isfinite(value):
+        raise ParseError(
+            "angle expression is not a finite number", start.line, start.column
+        )
     return value, pos
 
 

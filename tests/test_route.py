@@ -6,6 +6,7 @@ to the reported final layout — checked both by the permutation-aware oracle an
 for small cases, by the exact unitary.
 """
 
+import math
 import random
 from pathlib import Path
 
@@ -143,6 +144,77 @@ class TestRandomizedRouting:
                 initial_layout=result.initial_layout,
             )
             assert check.equivalent, f"routing changed semantics on {coupling.edges}"
+
+
+
+def _embed_index(index: int, layout: list[int]) -> int:
+    """Physical basis index for logical basis *index* placed through *layout*."""
+    return sum(1 << layout[q] for q in range(len(layout)) if index >> q & 1)
+
+
+class TestRandomizedExactRouting:
+    """Exact-unitary routing proof on random circuits over the full gate set.
+
+    Independent of :func:`check_routing_equivalence` (whose 4-qubit input
+    battery is sampled): the routed circuit's full physical unitary, read in
+    through the initial layout and out through the final layout, must equal the
+    original unitary up to global phase. Rotations with generic angles and
+    phase gates matter here: with only ``h``/``x``/``z`` a router that mangled
+    a rotation angle, or dropped an ``s``, would still pass.
+    """
+
+    PLAIN = ("h", "x", "y", "z", "s", "sdg", "t", "tdg")
+
+    @pytest.mark.parametrize(
+        ("n", "coupling"),
+        [
+            (2, CouplingMap(3, [(0, 2), (2, 1)])),  # operands never adjacent
+            (3, CouplingMap.line(3)),
+            (3, CouplingMap(4, [(0, 3), (1, 3), (2, 3)])),  # star, m > n
+            (4, CouplingMap.line(4)),
+            (4, CouplingMap.ring(4)),
+            (4, CouplingMap.line(5)),  # m > n
+        ],
+        ids=["bridge", "line3", "star", "line4", "ring4", "line5"],
+    )
+    @pytest.mark.parametrize("strategy", ["greedy", "sabre"])
+    def test_routed_unitary_matches_through_layouts(
+        self, n: int, coupling: CouplingMap, strategy: str
+    ) -> None:
+        rng = random.Random(1000 * n + coupling.num_qubits)
+        for trial in range(6):
+            gates: list[Gate] = []
+            for _ in range(rng.randint(4, 12)):
+                roll = rng.random()
+                if roll < 0.35:
+                    a, b = rng.sample(range(n), 2)
+                    gates.append(Gate(rng.choice(["cx", "cz", "swap"]), (a, b)))
+                elif roll < 0.6:
+                    name = rng.choice(["rx", "ry", "rz"])
+                    angle = rng.uniform(-math.pi, math.pi)
+                    gates.append(Gate(name, (rng.randrange(n),), angle=angle))
+                elif roll < 0.65:
+                    gates.append(Gate("barrier", tuple(range(n))))
+                else:
+                    gates.append(Gate(rng.choice(self.PLAIN), (rng.randrange(n),)))
+            original = Circuit(n, 0, gates)
+            result = route(original, coupling, strategy=strategy)
+            assert_adjacency(result.circuit, coupling)
+            routed = circuit_unitary(result.circuit)
+            dim = 1 << n
+            observed = [
+                [
+                    routed[_embed_index(i, result.final_layout)][
+                        _embed_index(j, result.initial_layout)
+                    ]
+                    for j in range(dim)
+                ]
+                for i in range(dim)
+            ]
+            comparison = compare_unitaries(circuit_unitary(original), observed)
+            assert comparison.equivalent, (
+                f"trial {trial}: diff norm {comparison.diff_norm:.3e} on {coupling.edges}"
+            )
 
 
 class TestSabre:

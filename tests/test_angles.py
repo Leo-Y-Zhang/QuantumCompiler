@@ -111,3 +111,25 @@ class TestFormatAngle:
         # positional or dump() produces source the parser rejects.
         for theta in (1e-05, -2.5e-07, 1e20, 1.5e-11):
             assert evaluate(format_angle(theta)) == theta
+
+
+class TestNonFiniteAngles:
+    """A value that overflows to inf/nan is a parse error, not a later crash."""
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "9" * 400,  # the literal itself overflows a float
+            "1" + "0" * 200 + "*" + "1" + "0" * 200,  # finite factors, infinite product
+            "(" + "9" * 400 + ")",  # caught inside parentheses too
+            "9" * 400 + "-" + "9" * 400,  # inf - inf = nan
+        ],
+        ids=["literal", "product", "parenthesized", "nan"],
+    )
+    def test_non_finite_value_rejected(self, text: str) -> None:
+        with pytest.raises(ParseError, match="not a finite number") as exc:
+            evaluate(text)
+        assert exc.value.line == 1
+
+    def test_large_finite_value_accepted(self) -> None:
+        assert evaluate("1" + "0" * 300) == 1e300
