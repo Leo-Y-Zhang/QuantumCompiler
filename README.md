@@ -434,4 +434,6 @@ examples are synthetic.
 
 ## License
 
-Proprietary - All Rights Reserved (c) 2026 Leo-Y-Zhang - portfolio viewing only.
+Proprietary, source-available. Copyright (c) 2026 Leo Y. Zhang. All rights
+reserved. You may read the source and run it to evaluate or check it; no reuse
+rights are granted. See [LICENSE](LICENSE) for the full terms.
